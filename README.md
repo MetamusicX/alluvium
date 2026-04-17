@@ -74,6 +74,7 @@ Alluvium/
 ├── Journal/                      ← Your daily entries (you write here)
 ├── Notes/                        ← Extracted atomic notes (auto-generated)
 ├── People/                       ← People mentioned in your journal (auto-generated)
+├── Authors/                      ← Creators: writers, philosophers, composers (auto-sorted)
 ├── Projects/                     ← Project references (auto-generated)
 ├── config.yaml                   ← Domain context map (customize to your life)
 ├── process_journal.py            ← Extraction engine
