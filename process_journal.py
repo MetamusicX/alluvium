@@ -162,7 +162,7 @@ def extract_notes(journal_text: str, config: dict, target_date: str, existing_ti
     prompt = build_extraction_prompt(journal_text, config, target_date, existing_titles)
 
     message = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
