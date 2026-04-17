@@ -49,7 +49,7 @@ It captures experience as it unfolds—moment by moment—without requiring any 
 
 ### In one sentence
 
-Alluvium is not a notebook—it is a terrain formed by the continuous deposition of experience in time.
+Alluvium is more than a notebook—it is a terrain formed by the continuous deposition of experience in time.
 
 ---
 
