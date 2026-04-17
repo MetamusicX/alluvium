@@ -1,0 +1,193 @@
+# Alluvium
+
+**Flow becomes knowledge**
+
+---
+
+### What it is
+
+Alluvium operates like a perceptual system.
+
+As we move through the world, our senses and mind continuously register impressions—external events, internal thoughts, fleeting ideas, emotions. This stream is not pre-organized; it is dense, heterogeneous, and often chaotic. Yet, over time, the brain does not store this as noise. It differentiates, associates, and stabilizes patterns, gradually forming a structured understanding of the world.
+
+Alluvium mirrors this process.
+
+It captures experience as it unfolds—moment by moment—without requiring any prior structure. From this continuous flow, the system progressively extracts, organizes, and stabilizes elements into a coherent and navigable knowledge landscape.
+
+---
+
+### What it does
+
+- Captures your day as a **continuous stream of thought**
+- Extracts people, ideas, projects, and concepts automatically
+- Generates structured knowledge from raw input
+- Preserves the original flow while building an organized system
+
+---
+
+### Core principles
+
+- **A flow writing itself continuously**
+    No interruption, no fragmentation—just time unfolding into inscription
+
+- **Flow becomes structure through time**
+    Organization is not imposed; it crystallizes
+
+- **No prior taxonomy**
+    You do not classify—structure emerges from the material itself
+
+- **Pure alluvial logic**
+    Deposition, differentiation, accumulation
+
+- **From nothing to terrain**
+    You start with a blank page; within days, a structured landscape appears
+
+- **The end of folders and tags**
+    The system organizes itself—precisely, dynamically, continuously
+
+---
+
+### In one sentence
+
+Alluvium is not a notebook—it is a terrain formed by the continuous deposition of experience in time.
+
+---
+
+## How it works
+
+```
+You write → Journal/2026-04-17.md
+System reads → extracts concepts, people, ideas, tasks, reflections
+System creates → individual markdown files with YAML frontmatter and [[wikilinks]]
+```
+
+1. **Write** your daily journal in `Journal/YYYY-MM-DD.md` — freely, without structure
+2. **Run** the processor: `python process_journal.py`
+3. **Browse** the results in Obsidian — atomic notes, linked and tagged, with an emergent graph
+
+The system uses Claude's API to read your journal entry and extract distinct items — each becomes its own Obsidian-compatible markdown file. Over time, as the same people, projects, and ideas recur across entries, a knowledge landscape emerges without you ever tagging, categorizing, or filing anything.
+
+## Folder structure
+
+```
+Alluvium/
+├── Journal/                      ← Your daily entries (you write here)
+├── Notes/                        ← Extracted atomic notes (auto-generated)
+├── People/                       ← People mentioned in your journal (auto-generated)
+├── Projects/                     ← Project references (auto-generated)
+├── config.yaml                   ← Domain context map (customize to your life)
+├── process_journal.py            ← Extraction engine
+├── open-today.sh                 ← Auto-launch script (macOS)
+└── README.md
+```
+
+## Generated note format
+
+Each extracted note is an Obsidian-compatible markdown file:
+
+```yaml
+---
+title: "Note Title"
+aliases: []
+date_created: 2026-04-17
+date_modified: 2026-04-17
+type: event | idea | task | reflection | practice-log | meeting | reading | person
+domain: work | writing | sport | personal
+tags:
+  - emergent-tag
+source_entries:
+  - "[[2026-04-17]]"
+related:
+  - "[[Related Note]]"
+status: active
+---
+
+Note content with [[wikilinks]] to other notes.
+
+Extracted from [[2026-04-17]].
+```
+
+## Setup
+
+### Requirements
+
+- Python 3.8+
+- An [Anthropic API key](https://console.anthropic.com/)
+- [Obsidian](https://obsidian.md/) (for browsing the knowledge graph)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/MetamusicX/alluvium.git
+cd alluvium
+
+# Install dependencies
+pip install anthropic pyyaml
+
+# Set your API key
+export ANTHROPIC_API_KEY="your-key-here"
+```
+
+### Configure your domains
+
+Edit `config.yaml` to reflect your own life domains. The system uses these to intelligently categorize extracted notes without you ever having to tag anything:
+
+```yaml
+domains:
+  work:
+    name: My Job
+    keywords: [office, meeting, project, deadline]
+    description: Main professional work
+
+  writing:
+    name: Writing Projects
+    keywords: [article, book, draft, manuscript]
+    description: Writing and publishing
+
+  sport:
+    name: Training
+    keywords: [run, swim, bike, workout, gym]
+    description: Athletic training
+```
+
+Add as many domains as you need. The system will learn to route your thoughts to the right place.
+
+## Usage
+
+```bash
+# Process today's journal
+python process_journal.py
+
+# Process a specific date
+python process_journal.py 2026-04-17
+```
+
+### Auto-launch (macOS)
+
+The included `open-today.sh` script creates today's journal file and opens it in Obsidian. Add it as a macOS Login Item to start every morning with a blank page ready for writing.
+
+### Open as Obsidian vault
+
+Open the `Alluvium/` folder as an Obsidian vault. Your daily journal entries and all extracted notes live in the same vault — write, process, and browse in one place.
+
+## The shift from PKM to PKA
+
+Traditional Personal Knowledge Management asks you to be the librarian of your own mind — tagging, filing, linking, organizing. Sooner or later, the system collapses under its own weight.
+
+Alluvium proposes a different model: a **Personal Knowledge Assistant**. You write freely. The AI handles the bookkeeping. Structure is not something you impose — it is something that emerges from the continuous accumulation of your experience.
+
+## Tech stack
+
+- **Python 3** — processing script
+- **Anthropic Claude API** — concept extraction
+- **Obsidian** — reading, browsing, graph view
+- **Markdown + YAML** — universal, portable, future-proof
+
+## License
+
+MIT
+
+---
+
+*Alluvium was built by [Paulo de Assis](https://github.com/MetamusicX) with Claude Code.*

@@ -1,0 +1,49 @@
+# Alluvium — Configuration
+# Customize this file to reflect your own life domains.
+# The system uses these to intelligently categorize extracted notes.
+
+domains:
+  work:
+    name: My Job
+    location: City, Country
+    keywords: [office, meeting, project, deadline, colleague]
+    description: Main professional work
+
+  writing:
+    name: Writing Projects
+    keywords: [article, book, draft, manuscript, chapter, essay]
+    description: Writing and publishing
+
+  sport:
+    name: Training
+    keywords: [run, swim, bike, workout, gym, race, training]
+    description: Athletic training and fitness
+
+  music:
+    name: Music
+    keywords: [practice, piano, guitar, instrument, repertoire, performance]
+    description: Musical practice and performance
+
+# Add your own domains here:
+#  side-project:
+#    name: Side Project
+#    keywords: [app, code, startup, prototype]
+#    description: Personal projects and experiments
+
+# Note types the system can extract
+note_types:
+  - event        # Something that happened
+  - idea         # A thought, insight, or creative spark
+  - task         # Something to do
+  - reflection   # A personal observation or feeling
+  - practice-log # Training or practice entry
+  - meeting      # A meeting or call
+  - reading      # Something read or discovered
+  - person       # A new person encountered or referenced
+
+# Paths (relative to Alluvium/)
+paths:
+  journal: Journal/
+  notes: Notes/
+  people: People/
+  projects: Projects/

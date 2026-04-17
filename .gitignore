@@ -1,0 +1,22 @@
+# Obsidian
+.obsidian/
+
+# macOS
+.DS_Store
+
+# Journal data (keep your entries private)
+Journal/*.md
+!Journal/.gitkeep
+
+# Extracted notes (auto-generated)
+Notes/*.md
+!Notes/.gitkeep
+People/*.md
+!People/.gitkeep
+Projects/*.md
+!Projects/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.env
