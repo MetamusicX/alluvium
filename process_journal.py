@@ -37,12 +37,13 @@ def get_journal_path(target_date: date) -> Path:
 
 
 def get_existing_notes() -> dict[str, Path]:
-    """Return a map of slug -> filepath for all existing notes."""
+    """Return a map of slug -> filepath for all existing notes (including subfolders)."""
     notes = {}
     for folder in ALL_FOLDERS:
         if folder.exists():
-            for f in folder.glob("*.md"):
-                notes[f.stem] = f
+            for f in folder.rglob("*.md"):
+                if not f.name.startswith("_"):  # Skip Maps of Content
+                    notes[f.stem] = f
     return notes
 
 
@@ -324,6 +325,11 @@ def process_journal(target_date: date):
     update_journal_entry(journal_path, notes)
 
     print(f"\nDone. {len(notes)} items processed from {date_str}.")
+
+    # Run clustering
+    from cluster_notes import run_clustering
+    print()
+    run_clustering()
 
 
 def main():

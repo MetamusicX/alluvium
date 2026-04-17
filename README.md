@@ -77,6 +77,7 @@ Alluvium/
 ├── Projects/                     ← Project references (auto-generated)
 ├── config.yaml                   ← Domain context map (customize to your life)
 ├── process_journal.py            ← Extraction engine
+├── cluster_notes.py              ← Emergent clustering engine
 ├── open-today.sh                 ← Auto-launch script (macOS)
 ├── setup.sh                      ← Setup and scheduling script
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
@@ -198,6 +199,32 @@ The included `open-today.sh` script creates today's journal file and opens it in
 ### Open as Obsidian vault
 
 Open the `Alluvium/` folder as an Obsidian vault. Your daily journal entries and all extracted notes live in the same vault — write, process, and browse in one place.
+
+### Emergent clustering
+
+After each processing run, Alluvium automatically scans all notes and identifies natural clusters — groups of notes that share enough in common to deserve their own subfolder. When a cluster reaches a threshold (3+ notes), the system:
+
+1. Creates a subfolder inside `Notes/`
+2. Moves related notes into it
+3. Generates a **Map of Content** — an index note linking to everything in the cluster
+
+```
+Notes/
+├── Training Log/
+│   ├── _Training Log.md          ← Map of Content (auto-generated)
+│   ├── 12km-easy-run.md
+│   ├── morning-swim.md
+│   └── bike-intervals.md
+├── ERC Evaluations/
+│   ├── _ERC Evaluations.md       ← Map of Content
+│   ├── panel-review-split.md
+│   └── ...
+├── emergent-structure-idea.md     ← not yet clustered
+```
+
+You never create a folder. You never move a file. The terrain forms its own ridges.
+
+You can also run clustering independently: `python cluster_notes.py`
 
 ### Voice input
 
