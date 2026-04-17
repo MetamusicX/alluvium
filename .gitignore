@@ -16,6 +16,9 @@ People/*.md
 Projects/*.md
 !Projects/.gitkeep
 
+# Logs
+logs/
+
 # Python
 __pycache__/
 *.pyc

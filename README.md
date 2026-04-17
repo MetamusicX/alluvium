@@ -78,6 +78,9 @@ Alluvium/
 ├── config.yaml                   ← Domain context map (customize to your life)
 ├── process_journal.py            ← Extraction engine
 ├── open-today.sh                 ← Auto-launch script (macOS)
+├── setup.sh                      ← Setup and scheduling script
+├── com.alluvium.process.plist    ← macOS LaunchAgent template
+├── logs/                         ← Processing logs
 └── README.md
 ```
 
@@ -115,17 +118,29 @@ Extracted from [[2026-04-17]].
 - An [Anthropic API key](https://console.anthropic.com/)
 - [Obsidian](https://obsidian.md/) (for browsing the knowledge graph)
 
-### Installation
+### Quick setup
 
 ```bash
 # Clone the repository
 git clone https://github.com/MetamusicX/alluvium.git
 cd alluvium
 
-# Install dependencies
-pip install anthropic pyyaml
+# Run the setup script (installs dependencies, configures daily auto-processing)
+bash setup.sh
+```
 
-# Set your API key
+The setup script will:
+- Install Python dependencies (`anthropic`, `pyyaml`)
+- Ask for your Anthropic API key
+- Ask what time you want daily auto-processing (default: 9 PM)
+- Install a macOS LaunchAgent that runs the processor automatically every day
+
+### Manual setup
+
+If you prefer to set things up yourself:
+
+```bash
+pip install anthropic pyyaml
 export ANTHROPIC_API_KEY="your-key-here"
 ```
 
@@ -163,6 +178,19 @@ python process_journal.py
 python process_journal.py 2026-04-17
 ```
 
+### Daily auto-processing
+
+Alluvium automatically processes your journal every day at the time you choose during setup. A macOS LaunchAgent (`com.alluvium.process.plist`) runs the extraction and deposits your notes while you sleep — or whenever you set it.
+
+To change the processing time, re-run `bash setup.sh`.
+
+You can also process manually at any time:
+
+```bash
+python process_journal.py           # today
+python process_journal.py 2026-04-17  # specific date
+```
+
 ### Auto-launch (macOS)
 
 The included `open-today.sh` script creates today's journal file and opens it in Obsidian. Add it as a macOS Login Item to start every morning with a blank page ready for writing.
@@ -170,6 +198,10 @@ The included `open-today.sh` script creates today's journal file and opens it in
 ### Open as Obsidian vault
 
 Open the `Alluvium/` folder as an Obsidian vault. Your daily journal entries and all extracted notes live in the same vault — write, process, and browse in one place.
+
+### Voice input
+
+Alluvium accepts any text — including dictated text. Use any dictation tool (Wispr Flow, macOS Dictation, or similar) to speak directly into your journal file. There is nothing to configure; the input is just markdown.
 
 ## The shift from PKM to PKA
 
