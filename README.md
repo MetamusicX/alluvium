@@ -56,9 +56,10 @@ Alluvium is more than a notebook—it is a terrain formed by the continuous depo
 ## How it works
 
 ```
-You write → Journal/2026-04-17.md
-System reads → extracts concepts, people, ideas, tasks, reflections
-System creates → individual markdown files with YAML frontmatter and [[wikilinks]]
+You write    → Journal/2026-04-17.md
+Extract      → concepts, people, ideas, tasks, reflections
+Cluster      → notes sort into emergent subfolders with Maps of Content
+Ripple       → new notes send connections backward through the entire vault
 ```
 
 1. **Write** your daily journal in `Journal/YYYY-MM-DD.md` — freely, without structure
@@ -79,6 +80,7 @@ Alluvium/
 ├── config.yaml                   ← Domain context map (customize to your life)
 ├── process_journal.py            ← Extraction engine
 ├── cluster_notes.py              ← Emergent clustering engine
+├── ripple.py                     ← Knowledge compounding engine
 ├── open-today.sh                 ← Auto-launch script (macOS)
 ├── setup.sh                      ← Setup and scheduling script
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
@@ -226,6 +228,21 @@ Notes/
 You never create a folder. You never move a file. The terrain forms its own ridges.
 
 You can also run clustering independently: `python cluster_notes.py`
+
+### Knowledge compounding (Ripple Engine)
+
+After each processing run, the ripple engine propagates new knowledge backward through the entire vault. Each new note sends connections into existing notes — cross-references, enrichments, insights, and evolution markers.
+
+This is what makes Alluvium a second brain rather than a filing system:
+
+- **Cross-references** — new notes link to existing topics they relate to
+- **Enrichment** — existing notes gain new context from today's thinking
+- **Cross-domain insights** — a concept from one domain illuminates another (a training principle that parallels a compositional technique)
+- **Evolution tracking** — plans link to their outcomes, ideas link to their developments
+
+Over weeks and months, the vault becomes dense with connections you never created manually. Knowledge compounds.
+
+You can also run the ripple engine independently: `python ripple.py`
 
 ### Voice input
 

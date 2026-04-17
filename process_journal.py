@@ -316,20 +316,34 @@ def process_journal(target_date: date):
     notes = extract_notes(journal_text, config, date_str, existing_titles)
     print(f"Found {len(notes)} items.\n")
 
-    # Write each note
+    # Write each note, track new ones
     print("Writing notes:")
+    new_note_titles = []
     for note in notes:
+        slug = slugify(note["title"])
+        is_new = slug not in existing_notes
         write_note(note, date_str, existing_notes)
+        if is_new and not note.get("append_to"):
+            new_note_titles.append(note["title"])
 
     # Update journal entry with backlinks
     update_journal_entry(journal_path, notes)
 
     print(f"\nDone. {len(notes)} items processed from {date_str}.")
 
+    # Save manifest for ripple engine
+    from ripple import save_manifest, run_ripple
+    save_manifest(new_note_titles)
+
     # Run clustering
     from cluster_notes import run_clustering
     print()
     run_clustering()
+
+    # Run ripple engine — compound knowledge
+    if new_note_titles:
+        print()
+        run_ripple(new_note_titles)
 
 
 def main():
