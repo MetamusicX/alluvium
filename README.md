@@ -267,6 +267,8 @@ Don't want to install anything? Try the web version:
 
 **[alluvium-flow.netlify.app](https://alluvium-flow.netlify.app/)**
 
+Write in any language — Alluvium processes journals in French, German, Portuguese, Spanish, Italian, Polish, Chinese, Japanese, and dozens more.
+
 Bring your own Anthropic API key — it stays in your browser and is never sent to any server.
 
 ## License
