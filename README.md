@@ -261,6 +261,14 @@ Alluvium proposes a different model: a **Personal Knowledge Assistant**. You wri
 - **Obsidian** — reading, browsing, graph view
 - **Markdown + YAML** — universal, portable, future-proof
 
+## Try it in your browser
+
+Don't want to install anything? Try the web version:
+
+**[alluvium-flow.netlify.app](https://alluvium-flow.netlify.app/)**
+
+Bring your own Anthropic API key — it stays in your browser and is never sent to any server.
+
 ## License
 
 MIT
