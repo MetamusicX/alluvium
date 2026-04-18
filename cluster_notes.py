@@ -17,10 +17,10 @@ import yaml
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
-NOTES_DIR = BASE_DIR / "Notes"
+NOTES_DIR = BASE_DIR / "01 Inbox"
 PEOPLE_DIR = BASE_DIR / "People"
 AUTHORS_DIR = BASE_DIR / "Authors"
-PROJECTS_DIR = BASE_DIR / "Projects"
+PROJECTS_DIR = BASE_DIR / "1 Projects"
 CONFIG_PATH = BASE_DIR / "config.yaml"
 
 CLUSTER_THRESHOLD = 3  # Minimum notes to form a cluster

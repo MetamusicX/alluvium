@@ -72,19 +72,20 @@ The system uses Claude's API to read your journal entry and extract distinct ite
 
 ```
 Alluvium/
-├── Journal/                      ← Your daily entries (you write here)
-├── Notes/                        ← Extracted atomic notes (auto-generated)
-├── People/                       ← People mentioned in your journal (auto-generated)
-├── Authors/                      ← Creators: writers, philosophers, composers (auto-sorted)
-├── Projects/                     ← Project references (auto-generated)
+├── 00 Journal/                   ← Your daily entries (you write here)
+├── 01 Inbox/                     ← New extracted notes land here
+├── 1 Projects/                   ← Active efforts with deliverables
+├── 2 Areas/                      ← Ongoing responsibilities
+├── 3 Resources/                  ← Reference material, topics of interest
+├── 4 Archive/                    ← Completed or inactive items
+├── Authors/                      ← Creators: writers, philosophers, composers
+├── People/                       ← Friends, family, colleagues
 ├── config.yaml                   ← Domain context map (customize to your life)
 ├── process_journal.py            ← Extraction engine
-├── cluster_notes.py              ← Emergent clustering engine
+├── cluster_notes.py              ← PARA clustering engine
 ├── ripple.py                     ← Knowledge compounding engine
-├── open-today.sh                 ← Auto-launch script (macOS)
 ├── setup.sh                      ← Setup and scheduling script
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
-├── logs/                         ← Processing logs
 └── README.md
 ```
 

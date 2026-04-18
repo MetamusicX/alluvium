@@ -5,18 +5,29 @@
 .DS_Store
 
 # Journal data (keep your entries private)
-Journal/*.md
-!Journal/.gitkeep
+00 Journal/*.md
+!00 Journal/.gitkeep
 
 # Extracted notes (auto-generated)
-Notes/*.md
-!Notes/.gitkeep
+01 Inbox/*.md
+!01 Inbox/.gitkeep
+1 Projects/**/*.md
+!1 Projects/.gitkeep
+2 Areas/**/*.md
+!2 Areas/.gitkeep
+3 Resources/**/*.md
+!3 Resources/.gitkeep
+4 Archive/**/*.md
+!4 Archive/.gitkeep
 People/*.md
 !People/.gitkeep
-Projects/*.md
-!Projects/.gitkeep
 Authors/*.md
 !Authors/.gitkeep
+
+# Hidden files
+.*
+!.gitignore
+!.gitkeep
 
 # Logs
 logs/
@@ -25,3 +36,8 @@ logs/
 __pycache__/
 *.pyc
 .env
+
+# Images
+*.jpg
+*.jpeg
+*.png

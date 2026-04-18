@@ -21,7 +21,7 @@ import yaml
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
-INBOX_DIR = BASE_DIR / "0 Inbox"
+INBOX_DIR = BASE_DIR / "01 Inbox"
 PROJECTS_DIR = BASE_DIR / "1 Projects"
 AREAS_DIR = BASE_DIR / "2 Areas"
 RESOURCES_DIR = BASE_DIR / "3 Resources"

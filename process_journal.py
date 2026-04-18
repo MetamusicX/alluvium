@@ -18,13 +18,17 @@ import yaml
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
-JOURNAL_DIR = BASE_DIR / "Journal"
-NOTES_DIR = BASE_DIR / "Notes"
+JOURNAL_DIR = BASE_DIR / "00 Journal"
+NOTES_DIR = BASE_DIR / "01 Inbox"
 PEOPLE_DIR = BASE_DIR / "People"
-PROJECTS_DIR = BASE_DIR / "Projects"
+AUTHORS_DIR = BASE_DIR / "Authors"
+PROJECTS_DIR = BASE_DIR / "1 Projects"
+AREAS_DIR = BASE_DIR / "2 Areas"
+RESOURCES_DIR = BASE_DIR / "3 Resources"
+ARCHIVE_DIR = BASE_DIR / "4 Archive"
 CONFIG_PATH = BASE_DIR / "config.yaml"
 
-ALL_FOLDERS = [NOTES_DIR, PEOPLE_DIR, PROJECTS_DIR]
+ALL_FOLDERS = [NOTES_DIR, PEOPLE_DIR, AUTHORS_DIR, PROJECTS_DIR, AREAS_DIR, RESOURCES_DIR, ARCHIVE_DIR]
 
 
 def load_config():
