@@ -349,6 +349,11 @@ def process_journal(target_date: date):
         print()
         run_ripple(new_note_titles)
 
+    # Generate daily summary and send to Day One
+    from summarize import run_summary
+    print()
+    run_summary(target_date)
+
 
 def main():
     parser = argparse.ArgumentParser(description="Alluvium — Process a daily journal entry into atomic notes.")

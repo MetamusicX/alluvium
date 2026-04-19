@@ -23,6 +23,8 @@ People/*.md
 !People/.gitkeep
 Authors/*.md
 !Authors/.gitkeep
+Day Summaries/*.md
+!Day Summaries/.gitkeep
 
 # Hidden files
 .*

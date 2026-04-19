@@ -78,12 +78,14 @@ Alluvium/
 ├── 2 Areas/                      ← Ongoing responsibilities
 ├── 3 Resources/                  ← Reference material, topics of interest
 ├── 4 Archive/                    ← Completed or inactive items
+├── Day Summaries/                ← De-fragmented daily summaries
 ├── Authors/                      ← Creators: writers, philosophers, composers
 ├── People/                       ← Friends, family, colleagues
 ├── config.yaml                   ← Domain context map (customize to your life)
 ├── process_journal.py            ← Extraction engine
 ├── cluster_notes.py              ← PARA clustering engine
 ├── ripple.py                     ← Knowledge compounding engine
+├── summarize.py                  ← Daily summary generator (+ Day One)
 ├── setup.sh                      ← Setup and scheduling script
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
 └── README.md
@@ -244,6 +246,14 @@ This is what makes Alluvium a second brain rather than a filing system:
 Over weeks and months, the vault becomes dense with connections you never created manually. Knowledge compounds.
 
 You can also run the ripple engine independently: `python ripple.py`
+
+### Daily summary (+ Day One integration)
+
+After rippling, Alluvium generates a structured summary of your day — de-fragmented by theme, not chronology. Training notes from morning and evening merge into one section. Scattered work mentions consolidate under one heading.
+
+The summary is saved to `Day Summaries/` and automatically sent to **Day One** (if installed) with full markdown formatting. Your daily journal and your knowledge vault close the loop without copy-pasting.
+
+You can also generate a summary independently: `python summarize.py` or for a specific date: `python summarize.py 2026-04-17`
 
 ### Voice input
 
