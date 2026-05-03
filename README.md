@@ -66,7 +66,7 @@ Ripple       → new notes send connections backward through the entire vault
 2. **Run** the processor: `python process_journal.py`
 3. **Browse** the results in Obsidian — atomic notes, linked and tagged, with an emergent graph
 
-The system uses Claude's API to read your journal entry and extract distinct items — each becomes its own Obsidian-compatible markdown file. Over time, as the same people, projects, and ideas recur across entries, a knowledge landscape emerges without you ever tagging, categorizing, or filing anything.
+The system uses your chosen AI provider to read your journal entry and extract distinct items — each becomes its own Obsidian-compatible markdown file. Over time, as the same people, projects, and ideas recur across entries, a knowledge landscape emerges without you ever tagging, categorizing, or filing anything.
 
 ## Folder structure
 
@@ -81,7 +81,8 @@ Alluvium/
 ├── Day Summaries/                ← De-fragmented daily summaries
 ├── Authors/                      ← Creators: writers, philosophers, composers
 ├── People/                       ← Friends, family, colleagues
-├── config.yaml                   ← Domain context map (customize to your life)
+├── config.yaml                   ← Provider, model, domains, PARA toggle
+├── llm.py                        ← Multi-provider LLM abstraction
 ├── process_journal.py            ← Extraction engine
 ├── cluster_notes.py              ← PARA clustering engine
 ├── ripple.py                     ← Knowledge compounding engine
@@ -122,8 +123,21 @@ Extracted from [[2026-04-17]].
 ### Requirements
 
 - Python 3.8+
-- An [Anthropic API key](https://console.anthropic.com/)
+- An API key from any supported provider (see table below)
 - [Obsidian](https://obsidian.md/) (for browsing the knowledge graph)
+
+### Supported AI Providers
+
+Alluvium is model-agnostic. Bring your own API key from any supported provider:
+
+| Provider | Env variable | Models |
+|----------|-------------|--------|
+| **Anthropic** | `ANTHROPIC_API_KEY` | Claude Sonnet 4.6, Opus 4.5, Haiku 4.5 |
+| **OpenAI** | `OPENAI_API_KEY` | GPT-4o, GPT-4.1, o4-mini |
+| **Google Gemini** | `GOOGLE_API_KEY` | Gemini 2.5 Pro, Gemini 2.5 Flash |
+| **Mistral** | `MISTRAL_API_KEY` | Mistral Large, Mistral Small |
+| **DeepSeek** | `DEEPSEEK_API_KEY` | DeepSeek Chat, DeepSeek Reasoner |
+| **Grok (xAI)** | `XAI_API_KEY` | Grok 3, Grok 3 Mini |
 
 ### Quick setup
 
@@ -137,8 +151,8 @@ bash setup.sh
 ```
 
 The setup script will:
-- Install Python dependencies (`anthropic`, `pyyaml`)
-- Ask for your Anthropic API key
+- Install Python dependencies (`pyyaml`)
+- Ask for your API key
 - Ask what time you want daily auto-processing (default: 9 PM)
 - Install a macOS LaunchAgent that runs the processor automatically every day
 
@@ -147,9 +161,18 @@ The setup script will:
 If you prefer to set things up yourself:
 
 ```bash
-pip install anthropic pyyaml
-export ANTHROPIC_API_KEY="your-key-here"
+pip install pyyaml
+export ANTHROPIC_API_KEY="your-key-here"  # or whichever provider you use
 ```
+
+Set your provider and model in `config.yaml`:
+
+```yaml
+provider: anthropic          # or openai, google, mistral, deepseek, grok
+model: claude-sonnet-4-6     # any model from your chosen provider
+```
+
+Or override via environment variables: `ALLUVIUM_PROVIDER`, `ALLUVIUM_MODEL`.
 
 ### Configure your domains
 
@@ -175,6 +198,18 @@ domains:
 
 Add as many domains as you need. The system will learn to route your thoughts to the right place.
 
+### PARA Organization (optional)
+
+Alluvium supports Tiago Forte's PARA method (Projects, Areas, Resources, Archive). When enabled, extracted notes are automatically classified and routed to the corresponding folders.
+
+Toggle in `config.yaml`:
+
+```yaml
+para_enabled: true   # or false for flat Inbox structure
+```
+
+Or via CLI: `--para` / `--no-para`
+
 ## Usage
 
 ```bash
@@ -183,6 +218,15 @@ python process_journal.py
 
 # Process a specific date
 python process_journal.py 2026-04-17
+
+# Use a different provider
+python process_journal.py --provider openai
+
+# Use a specific model
+python process_journal.py --provider google --model gemini-2.5-flash
+
+# Disable PARA (flat Inbox)
+python process_journal.py --no-para
 ```
 
 ### Daily auto-processing
@@ -267,8 +311,8 @@ Alluvium proposes a different model: a **Personal Knowledge Assistant**. You wri
 
 ## Tech stack
 
-- **Python 3** — processing script
-- **Anthropic Claude API** — concept extraction
+- **Python 3** — processing scripts (stdlib HTTP, zero external dependencies beyond PyYAML)
+- **Any LLM API** — Anthropic, OpenAI, Google Gemini, Mistral, DeepSeek, Grok
 - **Obsidian** — reading, browsing, graph view
 - **Markdown + YAML** — universal, portable, future-proof
 
@@ -280,7 +324,7 @@ Don't want to install anything? Try the web version:
 
 Write or speak in your own language. Alluvium will understand you.
 
-Bring your own Anthropic API key — it stays in your browser and is never sent to any server.
+Bring your own API key (Anthropic, OpenAI, Gemini, Mistral, or DeepSeek) — it stays in your browser and is never sent to any server.
 
 ## License
 
