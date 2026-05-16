@@ -78,6 +78,7 @@ Alluvium/
 ├── 2 Areas/                      ← Ongoing responsibilities
 ├── 3 Resources/                  ← Reference material, topics of interest
 ├── 4 Archive/                    ← Completed or inactive items
+├── 5 Conversations/              ← Distilled dialogues with your AI assistant
 ├── Day Summaries/                ← De-fragmented daily summaries
 ├── Authors/                      ← Creators: writers, philosophers, composers
 ├── People/                       ← Friends, family, colleagues
@@ -298,6 +299,22 @@ After rippling, Alluvium generates a structured summary of your day — de-fragm
 The summary is saved to `Day Summaries/` and automatically sent to **Day One** (if installed) with full markdown formatting. Your daily journal and your knowledge vault close the loop without copy-pasting.
 
 You can also generate a summary independently: `python summarize.py` or for a specific date: `python summarize.py 2026-04-17`
+
+### Conversations — dialogue with your own knowledge
+
+As your vault accumulates layers over weeks and months, a new possibility emerges: you can **interrogate your own sedimented knowledge**. Ask your AI assistant questions about patterns, connections, and themes across your entire vault. When a dialogue produces conclusions worth keeping, ask the assistant to summarize it.
+
+The summary is saved to `5 Conversations/` as a structured markdown file:
+
+- **Context** — what prompted the question
+- **Key Findings** — what emerged
+- **Conclusions** — interpretive takeaways
+- **Decisions** — what was resolved
+- **To-dos** — next actions
+
+These files are not automatic. They are created only when you explicitly ask — preserving only the dialogues that crystallize something worth returning to. Over time, the Conversations folder becomes a record of your evolving understanding of your own material.
+
+This is the shift from a system that merely *stores* knowledge to one that helps you *think with* it.
 
 ### Voice input
 
