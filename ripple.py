@@ -14,10 +14,12 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import date
 from pathlib import Path
 
-import anthropic
 import yaml
+
+from llm import call_llm_json
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -34,6 +36,7 @@ CONFIG_PATH = BASE_DIR / "config.yaml"
 ALL_DIRS = [INBOX_DIR, PROJECTS_DIR, AREAS_DIR, RESOURCES_DIR, ARCHIVE_DIR, PEOPLE_DIR, AUTHORS_DIR]
 
 MAX_RIPPLES_PER_RUN = 15  # Safety limit
+MAX_CANDIDATE_NOTES = 250  # Existing notes shown to the LLM (vault is ~1000 and growing)
 
 
 def load_config():
@@ -41,19 +44,19 @@ def load_config():
         return yaml.safe_load(f)
 
 
-def load_manifest() -> list[str]:
-    """Load the list of note titles created in the last processing run."""
+def load_manifest() -> tuple[list[str], str | None]:
+    """Load the note titles and journal date of the last processing run."""
     if not MANIFEST_PATH.exists():
-        return []
+        return [], None
     with open(MANIFEST_PATH) as f:
         data = json.load(f)
-    return data.get("new_notes", [])
+    return data.get("new_notes", []), data.get("date")
 
 
-def save_manifest(new_notes: list[str]):
+def save_manifest(new_notes: list[str], date_str: str | None = None):
     """Save a manifest of newly created notes."""
     with open(MANIFEST_PATH, "w") as f:
-        json.dump({"new_notes": new_notes}, f, indent=2)
+        json.dump({"new_notes": new_notes, "date": date_str}, f, indent=2)
 
 
 def read_note(filepath: Path) -> dict | None:
@@ -86,6 +89,41 @@ def collect_all_notes() -> list[dict]:
             if meta:
                 notes.append(meta)
     return notes
+
+
+def select_candidates(new_notes: list[dict], existing_notes: list[dict], cap: int = MAX_CANDIDATE_NOTES) -> list[dict]:
+    """Pre-filter existing notes so the prompt stays bounded as the vault grows.
+
+    Relevance = shared tags (weighted) + shared domain. Remaining slots are
+    filled with the most recently modified notes, so cross-domain ripples on
+    current work remain possible.
+    """
+    if len(existing_notes) <= cap:
+        return existing_notes
+
+    new_tags = {t for n in new_notes for t in n.get("tags", [])}
+    new_domains = {n.get("domain") for n in new_notes if n.get("domain")}
+
+    def relevance(note: dict) -> int:
+        tag_overlap = len(new_tags & set(note.get("tags", [])))
+        domain_match = 1 if note.get("domain") in new_domains else 0
+        return tag_overlap * 2 + domain_match
+
+    scored = sorted(existing_notes, key=relevance, reverse=True)
+    relevant = [n for n in scored if relevance(n) > 0][:cap]
+
+    if len(relevant) < cap:
+        chosen = {id(n) for n in relevant}
+        def mtime(note: dict) -> float:
+            try:
+                return note["_path"].stat().st_mtime
+            except OSError:
+                return 0
+        recent = sorted((n for n in existing_notes if id(n) not in chosen), key=mtime, reverse=True)
+        relevant += recent[: cap - len(relevant)]
+
+    print(f"Candidate notes for rippling: {len(relevant)} of {len(existing_notes)} (filtered by tag/domain overlap + recency)")
+    return relevant
 
 
 def build_ripple_prompt(new_notes: list[dict], existing_notes: list[dict], config: dict) -> str:
@@ -156,11 +194,35 @@ If no meaningful connections exist, return an empty array: []
 Return ONLY the JSON array. No markdown code fences, no commentary."""
 
 
-def apply_ripples(ripples: list[dict], all_notes: list[dict]):
+def _normalize_title(title: str) -> str:
+    """Normalize a title for fuzzy matching: lowercase, unify dashes/quotes, strip punctuation."""
+    t = title.lower()
+    t = t.replace("—", "-").replace("–", "-").replace("'", "'").replace(""", '"').replace(""", '"')
+    t = re.sub(r"[^\w\s-]", "", t)
+    t = re.sub(r"[\s_-]+", " ", t)
+    return t.strip()
+
+
+def find_target_note(target_title: str, all_notes: list[dict]) -> dict | None:
+    """Find a note by title — exact first, then normalized (the LLM often paraphrases punctuation)."""
+    for n in all_notes:
+        if n.get("title", "") == target_title:
+            return n
+    wanted = _normalize_title(target_title)
+    for n in all_notes:
+        if _normalize_title(str(n.get("title", ""))) == wanted:
+            return n
+    return None
+
+
+def apply_ripples(ripples: list[dict], all_notes: list[dict], date_str: str | None = None):
     """Apply the ripple updates to existing notes."""
     if not ripples:
         print("No ripples to apply.")
         return
+
+    if date_str is None:
+        date_str = date.today().isoformat()
 
     for ripple in ripples[:MAX_RIPPLES_PER_RUN]:
         target_title = ripple.get("target_title", "")
@@ -170,12 +232,7 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict]):
         add_related = ripple.get("add_related", [])
         add_tags = ripple.get("add_tags", [])
 
-        # Find the target note
-        target = None
-        for n in all_notes:
-            if n.get("title", "") == target_title:
-                target = n
-                break
+        target = find_target_note(target_title, all_notes)
 
         if not target or not target["_path"].exists():
             print(f"  [miss] \"{target_title}\" — not found")
@@ -209,7 +266,7 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict]):
                         modified = True
 
                     if modified or append_text:
-                        fm["date_modified"] = __import__("datetime").date.today().isoformat()
+                        fm["date_modified"] = date_str
 
                     # Rebuild the file
                     body = parts[2]
@@ -219,7 +276,6 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict]):
                     updated = "---\n" + yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False) + "---" + body
                     filepath.write_text(updated, encoding="utf-8")
 
-                    icon = {"cross-reference": "link", "enrichment": "plus", "insight": "spark", "evolution": "arrow"}
                     print(f"  [{connection_type}] \"{target_title}\" — {reason}")
 
                 except Exception as e:
@@ -227,7 +283,7 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict]):
                     continue
 
 
-def run_ripple(new_note_titles: list[str] | None = None):
+def run_ripple(new_note_titles: list[str] | None = None, date_str: str | None = None):
     """Main ripple pipeline."""
     print("=== Alluvium — Ripple Engine ===\n")
 
@@ -236,7 +292,9 @@ def run_ripple(new_note_titles: list[str] | None = None):
 
     # Determine which notes are new
     if new_note_titles is None:
-        new_note_titles = load_manifest()
+        new_note_titles, manifest_date = load_manifest()
+        if date_str is None:
+            date_str = manifest_date
 
     if not new_note_titles:
         print("No new notes to ripple from. Nothing to do.\n")
@@ -257,27 +315,16 @@ def run_ripple(new_note_titles: list[str] | None = None):
         print("No existing notes to ripple into. The vault is still young.\n")
         return
 
+    candidates = select_candidates(new_notes, existing_notes)
+
     print("\nAnalyzing connections...\n")
 
-    # Ask Claude to identify ripples
-    client = anthropic.Anthropic()
-    prompt = build_ripple_prompt(new_notes, existing_notes, config)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    response_text = message.content[0].text.strip()
-    if response_text.startswith("```"):
-        response_text = re.sub(r"^```(?:json)?\n?", "", response_text)
-        response_text = re.sub(r"\n?```$", "", response_text)
-
+    # Ask LLM to identify ripples (retries internally on malformed JSON)
+    prompt = build_ripple_prompt(new_notes, candidates, config)
     try:
-        ripples = json.loads(response_text)
-    except json.JSONDecodeError:
-        print("Failed to parse ripple response. Skipping.\n")
+        ripples = call_llm_json(prompt, max_tokens=4096)
+    except RuntimeError as e:
+        print(f"Failed to parse ripple response ({e}). Skipping.\n")
         return
 
     if not ripples:
@@ -285,7 +332,7 @@ def run_ripple(new_note_titles: list[str] | None = None):
         return
 
     print(f"Found {len(ripples)} ripple(s). Applying:\n")
-    apply_ripples(ripples, all_notes)
+    apply_ripples(ripples, all_notes, date_str)
 
     print(f"\n=== Ripple complete — {len(ripples)} connection(s) made ===")
 

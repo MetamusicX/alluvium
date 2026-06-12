@@ -56,13 +56,13 @@ Alluvium is more than a notebook—it is a terrain formed by the continuous depo
 ## How it works
 
 ```
-You write    → Journal/2026-04-17.md
+You write    → 00 Journal/2026-04-17.md
 Extract      → concepts, people, ideas, tasks, reflections
 Cluster      → notes sort into emergent subfolders with Maps of Content
 Ripple       → new notes send connections backward through the entire vault
 ```
 
-1. **Write** your daily journal in `Journal/YYYY-MM-DD.md` — freely, without structure
+1. **Write** your daily journal in `00 Journal/YYYY-MM-DD.md` — freely, without structure
 2. **Run** the processor: `python process_journal.py`
 3. **Browse** the results in Obsidian — atomic notes, linked and tagged, with an emergent graph
 
@@ -87,9 +87,12 @@ Alluvium/
 ├── process_journal.py            ← Extraction engine
 ├── cluster_notes.py              ← PARA clustering engine
 ├── ripple.py                     ← Knowledge compounding engine
-├── summarize.py                  ← Daily summary generator (+ Day One)
+├── summarize.py                  ← Daily summary generator (+ optional Day One)
+├── healthcheck.py                ← Installation verifier
 ├── setup.sh                      ← Setup and scheduling script
+├── open-today.sh                 ← Creates + opens today's journal note
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
+├── requirements.txt
 └── README.md
 ```
 
@@ -133,7 +136,8 @@ Alluvium is model-agnostic. Bring your own API key from any supported provider:
 
 | Provider | Env variable | Models |
 |----------|-------------|--------|
-| **Anthropic** | `ANTHROPIC_API_KEY` | Claude Sonnet 4.6, Opus 4.5, Haiku 4.5 |
+| **Anthropic** | `ANTHROPIC_API_KEY` | Claude Sonnet 4.6, Opus 4.8, Haiku 4.5 |
+| **Claude Code CLI** | *(none — uses your Claude subscription)* | Sonnet, Opus, Haiku |
 | **OpenAI** | `OPENAI_API_KEY` | GPT-4o, GPT-4.1, o4-mini |
 | **Google Gemini** | `GOOGLE_API_KEY` | Gemini 2.5 Pro, Gemini 2.5 Flash |
 | **Mistral** | `MISTRAL_API_KEY` | Mistral Large, Mistral Small |
@@ -154,8 +158,9 @@ bash setup.sh
 The setup script will:
 - Install Python dependencies (`pyyaml`)
 - Ask for your API key
-- Ask what time you want daily auto-processing (default: 9 PM)
+- Ask what time you want daily auto-processing (default: 6:30 AM — Alluvium processes *yesterday's* entry, so a morning run captures the complete day)
 - Install a macOS LaunchAgent that runs the processor automatically every day
+- Run a healthcheck to verify the installation
 
 ### Manual setup
 
@@ -214,7 +219,7 @@ Or via CLI: `--para` / `--no-para`
 ## Usage
 
 ```bash
-# Process today's journal
+# Process yesterday's journal (the default — Alluvium runs in the morning)
 python process_journal.py
 
 # Process a specific date
@@ -239,7 +244,7 @@ To change the processing time, re-run `bash setup.sh`.
 You can also process manually at any time:
 
 ```bash
-python process_journal.py           # today
+python process_journal.py             # yesterday (default)
 python process_journal.py 2026-04-17  # specific date
 ```
 
@@ -255,21 +260,23 @@ Open the `Alluvium/` folder as an Obsidian vault. Your daily journal entries and
 
 After each processing run, Alluvium automatically scans all notes and identifies natural clusters — groups of notes that share enough in common to deserve their own subfolder. When a cluster reaches a threshold (3+ notes), the system:
 
-1. Creates a subfolder inside `Notes/`
+1. Creates a subfolder inside the matching PARA folder (`1 Projects/`, `2 Areas/`, `3 Resources/`, or `4 Archive/`)
 2. Moves related notes into it
 3. Generates a **Map of Content** — an index note linking to everything in the cluster
 
 ```
-Notes/
+2 Areas/
 ├── Training Log/
 │   ├── _Training Log.md          ← Map of Content (auto-generated)
 │   ├── 12km-easy-run.md
 │   ├── morning-swim.md
 │   └── bike-intervals.md
-├── ERC Evaluations/
-│   ├── _ERC Evaluations.md       ← Map of Content
+1 Projects/
+├── Panel Reviews/
+│   ├── _Panel Reviews.md         ← Map of Content
 │   ├── panel-review-split.md
 │   └── ...
+01 Inbox/
 ├── emergent-structure-idea.md     ← not yet clustered
 ```
 
@@ -292,11 +299,11 @@ Over weeks and months, the vault becomes dense with connections you never create
 
 You can also run the ripple engine independently: `python ripple.py`
 
-### Daily summary (+ Day One integration)
+### Daily summary (+ optional Day One integration)
 
 After rippling, Alluvium generates a structured summary of your day — de-fragmented by theme, not chronology. Training notes from morning and evening merge into one section. Scattered work mentions consolidate under one heading.
 
-The summary is saved to `Day Summaries/` and automatically sent to **Day One** (if installed) with full markdown formatting. Your daily journal and your knowledge vault close the loop without copy-pasting.
+The summary is saved to `Day Summaries/`. If you use the **Day One** journaling app on macOS, set `dayone_enabled: true` in `config.yaml` and summaries are also sent there automatically (via the Day One CLI) with full markdown formatting — your daily journal and your knowledge vault close the loop without copy-pasting.
 
 You can also generate a summary independently: `python summarize.py` or for a specific date: `python summarize.py 2026-04-17`
 

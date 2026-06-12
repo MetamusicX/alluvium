@@ -5,11 +5,12 @@
 .DS_Store
 
 # Journal data (keep your entries private)
-00 Journal/*.md
+# ** covers monthly archive subfolders (00 Journal/2026-05/ etc.)
+00 Journal/**/*.md
 !00 Journal/.gitkeep
 
 # Extracted notes (auto-generated)
-01 Inbox/*.md
+01 Inbox/**/*.md
 !01 Inbox/.gitkeep
 1 Projects/**/*.md
 !1 Projects/.gitkeep
@@ -19,14 +20,16 @@
 !3 Resources/.gitkeep
 4 Archive/**/*.md
 !4 Archive/.gitkeep
-People/*.md
+5 Conversations/**/*.md
+!5 Conversations/.gitkeep
+People/**/*.md
 !People/.gitkeep
-Authors/*.md
+Authors/**/*.md
 !Authors/.gitkeep
-Day Summaries/*.md
+Day Summaries/**/*.md
 !Day Summaries/.gitkeep
 
-# Hidden files
+# Hidden files (also covers runtime state: .last_run.json, .dayone_sent.json)
 .*
 !.gitignore
 !.gitkeep

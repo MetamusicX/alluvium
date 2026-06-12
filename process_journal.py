@@ -7,14 +7,14 @@ Reads a daily journal entry and extracts atomic notes with Obsidian-compatible Y
 from __future__ import annotations
 
 import argparse
-import json
 import re
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
-import anthropic
 import yaml
+
+from llm import call_llm_json, is_para_enabled
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -30,6 +30,44 @@ CONFIG_PATH = BASE_DIR / "config.yaml"
 
 ALL_FOLDERS = [NOTES_DIR, PEOPLE_DIR, AUTHORS_DIR, PROJECTS_DIR, AREAS_DIR, RESOURCES_DIR, ARCHIVE_DIR]
 
+PARA_FOLDERS = {
+    "project": PROJECTS_DIR,
+    "area": AREAS_DIR,
+    "resource": RESOURCES_DIR,
+    "archive": ARCHIVE_DIR,
+}
+
+
+SUMMARIES_DIR = BASE_DIR / "Day Summaries"
+
+
+def archive_previous_month(target_date: date):
+    """On the 1st of a month, move the previous month's files into YYYY-MM subfolders."""
+    if target_date.day != 1:
+        return
+
+    # Calculate previous month
+    if target_date.month == 1:
+        prev_year, prev_month = target_date.year - 1, 12
+    else:
+        prev_year, prev_month = target_date.year, target_date.month - 1
+
+    prefix = f"{prev_year}-{prev_month:02d}"
+
+    for folder in [JOURNAL_DIR, SUMMARIES_DIR]:
+        if not folder.exists():
+            continue
+        files = sorted(folder.glob(f"{prefix}-*.md"))
+        if not files:
+            continue
+        archive = folder / prefix
+        archive.mkdir(exist_ok=True)
+        for f in files:
+            dest = archive / f.name
+            f.rename(dest)
+            print(f"  [archive] {f.name} → {prefix}/")
+        print(f"Archived {len(files)} files into {folder.name}/{prefix}/")
+
 
 def load_config():
     with open(CONFIG_PATH) as f:
@@ -37,7 +75,14 @@ def load_config():
 
 
 def get_journal_path(target_date: date) -> Path:
-    return JOURNAL_DIR / f"{target_date.isoformat()}.md"
+    """Find journal file — check root first, then month subfolder."""
+    root = JOURNAL_DIR / f"{target_date.isoformat()}.md"
+    if root.exists():
+        return root
+    monthly = JOURNAL_DIR / target_date.strftime("%Y-%m") / f"{target_date.isoformat()}.md"
+    if monthly.exists():
+        return monthly
+    return root  # default to root (for error messages)
 
 
 def get_existing_notes() -> dict[str, Path]:
@@ -51,22 +96,42 @@ def get_existing_notes() -> dict[str, Path]:
     return notes
 
 
-def get_existing_titles(existing_notes: dict[str, Path]) -> list[str]:
-    """Extract titles from YAML frontmatter of existing notes."""
-    titles = []
-    for slug, path in existing_notes.items():
+MAX_RECENT_TITLES = 200  # non-people notes shown to the extraction prompt
+
+
+def _read_title(slug: str, path: Path) -> str:
+    """Read a note's title from frontmatter, falling back to the slug."""
+    try:
         text = path.read_text(encoding="utf-8")
         if text.startswith("---"):
+            fm = yaml.safe_load(text.split("---", 2)[1])
+            if fm and "title" in fm:
+                return fm["title"]
+    except Exception:
+        pass
+    return slug.replace("-", " ").title()
+
+
+def get_existing_titles(existing_notes: dict[str, Path]) -> list[str]:
+    """Titles shown to the extraction prompt for linking/dedup.
+
+    All People/Authors are always included (so the model never re-creates an
+    existing person); other notes are included by recency, capped, so the list
+    stays bounded as the vault grows.
+    """
+    people, others = [], []
+    for slug, path in existing_notes.items():
+        if PEOPLE_DIR in path.parents or AUTHORS_DIR in path.parents:
+            people.append((slug, path))
+        else:
             try:
-                fm_text = text.split("---", 2)[1]
-                fm = yaml.safe_load(fm_text)
-                if fm and "title" in fm:
-                    titles.append(fm["title"])
-                    continue
-            except Exception:
-                pass
-        titles.append(slug.replace("-", " ").title())
-    return titles
+                mtime = path.stat().st_mtime
+            except OSError:
+                mtime = 0
+            others.append((mtime, slug, path))
+    others.sort(key=lambda t: t[0], reverse=True)
+    selected = people + [(slug, path) for _, slug, path in others[:MAX_RECENT_TITLES]]
+    return [_read_title(slug, path) for slug, path in selected]
 
 
 FEW_SHOT_EXAMPLE = """
@@ -75,7 +140,7 @@ FEW_SHOT_EXAMPLE = """
 **Journal entry (2026-03-10):**
 Ran 12km this morning, easy pace around 5:30/km. Legs felt heavy from yesterday's bike.
 Later had a call with Henrik about the panel review — we agreed to split the applications by discipline. Need to send him my half by Friday.
-Reading Deleuze's "Difference and Repetition" again. The concept of the virtual is exactly what I need for my chapter on layered temporality.
+Reading Deleuze's "Difference and Repetition" again. The concept of the virtual is exactly what I need for the chapter on layered temporality.
 
 **Extracted notes:**
 [
@@ -84,7 +149,7 @@ Reading Deleuze's "Difference and Repetition" again. The concept of the virtual 
     "type": "practice-log",
     "domain": "sport",
     "tags": ["running", "easy-pace", "fatigue"],
-    "related": ["Training"],
+    "related": ["Training Log"],
     "body": "12km easy run at ~5:30/km. Legs felt heavy from yesterday's bike session — cumulative fatigue building. Extracted from [[2026-03-10]]."
   },
   {
@@ -109,19 +174,41 @@ Reading Deleuze's "Difference and Repetition" again. The concept of the virtual 
     "domain": "writing",
     "tags": ["deleuze", "difference-and-repetition", "temporality", "philosophy"],
     "related": ["Writing Projects"],
-    "body": "Re-reading Deleuze's *Difference and Repetition*. The concept of the virtual connects directly to the chapter on layered temporality. The virtual as a structure that is real but not actual — worth developing further. Extracted from [[2026-03-10]]."
+    "body": "Re-reading Deleuze's *Difference and Repetition*. The concept of the virtual — a structure that is real but not actual — maps onto layered temporal strata that only become audible through their interactions. Exactly what the chapter on layered temporality needs. Extracted from [[2026-03-10]]."
   }
 ]
 """
 
 
-def build_extraction_prompt(journal_text: str, config: dict, target_date: str, existing_titles: list[str]) -> str:
+def build_extraction_prompt(journal_text: str, config: dict, target_date: str, existing_titles: list[str], para_enabled: bool = True) -> str:
     domains_desc = "\n".join(
         f"- **{d['name']}**: {d['description']} (keywords: {', '.join(d.get('keywords', []))})"
         for d in config["domains"].values()
     )
     note_types = ", ".join(config["note_types"])
-    existing = ", ".join(existing_titles[:100]) if existing_titles else "(none yet)"
+    existing = ", ".join(existing_titles) if existing_titles else "(none yet)"
+    domain_keys = ", ".join(config["domains"].keys()) + ", personal"
+
+    para_rules = ""
+    para_output_field = ""
+    if para_enabled:
+        para_rules = """
+## PARA Classification (Tiago Forte)
+Classify each note into one of the PARA categories:
+- **project** — an active effort with a clear outcome or deadline
+  (e.g. a grant application, preparing for a race, writing a chapter)
+- **area** — an ongoing responsibility with no end date
+  (e.g. health, career, a professional role)
+- **resource** — a topic of interest, reference material, ideas worth keeping
+  (e.g. a book insight, a technique, a concept)
+- **archive** — completed items, things no longer active
+
+Most freshly extracted notes will be "resource" (ideas, readings, reflections)
+or "project" (tasks with deadlines, active work). Use "area" for ongoing
+commitments. Use "archive" only when the note explicitly describes something
+finished or closed. Person-type notes do not need a PARA category.
+"""
+        para_output_field = '\n- "para": one of "project", "area", "resource", "archive" — the PARA category (omit for person-type notes)'
 
     return f"""You are a journal analyst for a personal knowledge management system. Your job is to read a daily journal entry and extract distinct atomic notes from it.
 
@@ -139,20 +226,20 @@ def build_extraction_prompt(journal_text: str, config: dict, target_date: str, e
 5. Identify people mentioned. For people NOT already in the existing notes list, create a person-type note.
 6. Use [[wikilinks]] in the note body to reference other notes (both existing and newly created).
 7. Keep the original voice and feeling. Don't sanitize or over-summarize.
-8. For practice logs (training, music, etc.), include specific details: duration, what was practiced/trained, how it felt.
+8. For practice logs (piano, training), include specific details: duration, what was practiced/trained, how it felt.
 9. Every note body should end with: Extracted from [[{target_date}]].
 10. If a person or concept already exists in the system, reference them with [[wikilinks]] but do NOT create a new note for them. Instead, include an "append_to" field with their exact title.
-{FEW_SHOT_EXAMPLE}
+{para_rules}{FEW_SHOT_EXAMPLE}
 
 ## Output Format
 Return a JSON array of objects, each with:
 - "title": short descriptive title (will become the filename)
 - "type": one of the note types
-- "domain": primary domain key (from config.yaml domains)
+- "domain": primary domain key ({domain_keys})
 - "tags": list of tags (lowercase, no #)
 - "related": list of titles this note connects to (used as [[wikilinks]])
 - "body": the note content in markdown, using [[wikilinks]] for connections
-- "append_to": (optional) if this adds context to an existing note, put the existing note's title here
+- "append_to": (optional) if this adds context to an existing note, put the existing note's title here{para_output_field}
 
 Journal date: {target_date}
 
@@ -162,24 +249,9 @@ Journal date: {target_date}
 Return ONLY the JSON array. No markdown code fences, no commentary."""
 
 
-def extract_notes(journal_text: str, config: dict, target_date: str, existing_titles: list[str]) -> list[dict]:
-    client = anthropic.Anthropic()
-    prompt = build_extraction_prompt(journal_text, config, target_date, existing_titles)
-
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
-    )
-
-    response_text = message.content[0].text.strip()
-
-    # Strip markdown code fences if present
-    if response_text.startswith("```"):
-        response_text = re.sub(r"^```(?:json)?\n?", "", response_text)
-        response_text = re.sub(r"\n?```$", "", response_text)
-
-    return json.loads(response_text)
+def extract_notes(journal_text: str, config: dict, target_date: str, existing_titles: list[str], para_enabled: bool = True) -> list[dict]:
+    prompt = build_extraction_prompt(journal_text, config, target_date, existing_titles, para_enabled)
+    return call_llm_json(prompt, max_tokens=8192)
 
 
 def slugify(title: str) -> str:
@@ -202,7 +274,8 @@ def append_to_note(filepath: Path, note: dict, target_date: str):
 
     new_entry = f"\n\n---\n### Update — {target_date}\n\n{note.get('body', '')}"
 
-    # Also update tags in frontmatter if new ones
+    # Update frontmatter (date_modified always, tags when new ones appear)
+    # so the daily summary picks this note up as touched today.
     if existing_content.startswith("---"):
         parts = existing_content.split("---", 2)
         if len(parts) >= 3:
@@ -212,20 +285,20 @@ def append_to_note(filepath: Path, note: dict, target_date: str):
                 new_tags = set(note.get("tags", []))
                 if new_tags - existing_tags:
                     fm["tags"] = sorted(existing_tags | new_tags)
-                    fm["date_modified"] = target_date
-                    updated = "---\n" + yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False) + "---" + parts[2] + new_entry
-                    filepath.write_text(updated, encoding="utf-8")
-                    print(f"  [append] {filepath.name} (updated tags + new context)")
-                    return
+                fm["date_modified"] = target_date
+                updated = "---\n" + yaml.dump(fm, default_flow_style=False, allow_unicode=True, sort_keys=False) + "---" + parts[2] + new_entry
+                filepath.write_text(updated, encoding="utf-8")
+                print(f"  [append] {filepath.name}")
+                return
             except Exception:
                 pass
 
-    # Fallback: just append
+    # Fallback: just append (no parseable frontmatter)
     filepath.write_text(existing_content + new_entry + "\n", encoding="utf-8")
     print(f"  [append] {filepath.name}")
 
 
-def write_note(note: dict, target_date: str, existing_notes: dict[str, Path]):
+def write_note(note: dict, target_date: str, existing_notes: dict[str, Path], para_enabled: bool = True):
     slug = slugify(note["title"])
     note_type = note.get("type", "note")
 
@@ -233,16 +306,19 @@ def write_note(note: dict, target_date: str, existing_notes: dict[str, Path]):
     append_target = note.get("append_to")
     if append_target:
         existing = find_existing_note(append_target, existing_notes)
-        if existing:
+        if existing and existing.exists():
             append_to_note(existing, note, target_date)
             return
 
     # Choose output folder
     if note_type == "person":
         folder = PEOPLE_DIR
+    elif para_enabled and note.get("para") in PARA_FOLDERS:
+        folder = PARA_FOLDERS[note["para"]]
     else:
         folder = NOTES_DIR
 
+    folder.mkdir(parents=True, exist_ok=True)
     filepath = folder / f"{slug}.md"
 
     # If note already exists, append instead of skipping
@@ -258,11 +334,15 @@ def write_note(note: dict, target_date: str, existing_notes: dict[str, Path]):
         "date_modified": target_date,
         "type": note_type,
         "domain": note.get("domain", "personal"),
+    }
+    if note.get("para"):
+        frontmatter["para"] = note["para"]
+    frontmatter.update({
         "tags": note.get("tags", []),
         "source_entries": [f"[[{target_date}]]"],
         "related": [f"[[{r}]]" for r in note.get("related", [])],
         "status": "active",
-    }
+    })
 
     content = "---\n"
     content += yaml.dump(frontmatter, default_flow_style=False, allow_unicode=True, sort_keys=False)
@@ -285,14 +365,31 @@ def update_journal_entry(journal_path: Path, notes: list[dict]):
     if "## Concepts Extracted" in journal_text:
         return
 
-    links = "\n".join(f"- [[{note['title']}]]" for note in notes)
+    # Notes that were appended to an existing note should link to that note's
+    # title — the new title never became a file.
+    link_titles = []
+    for note in notes:
+        title = note.get("append_to") or note["title"]
+        if title not in link_titles:
+            link_titles.append(title)
+    links = "\n".join(f"- [[{title}]]" for title in link_titles)
     section = f"\n\n---\n## Concepts Extracted\n{links}\n"
 
     journal_path.write_text(journal_text + section, encoding="utf-8")
     print(f"\nUpdated journal entry with {len(notes)} concept links.")
 
 
-def process_journal(target_date: date):
+def _already_extracted(journal_path: Path) -> bool:
+    """Check if this journal entry has already been processed."""
+    if not journal_path.exists():
+        return False
+    return "## Concepts Extracted" in journal_path.read_text(encoding="utf-8")
+
+
+def process_journal(target_date: date, para_enabled: bool = True):
+    # Archive previous month's files on the 1st
+    archive_previous_month(target_date)
+
     journal_path = get_journal_path(target_date)
 
     if not journal_path.exists():
@@ -300,6 +397,16 @@ def process_journal(target_date: date):
         print(f"Expected: {journal_path}")
         print(f"\nCreate your journal entry at: {journal_path}")
         sys.exit(1)
+
+    # Deduplication: skip extraction if already done, but still run summary.
+    # The summary stage has its own dedup (file-existence check), so this is safe.
+    already_extracted = _already_extracted(journal_path)
+    if already_extracted:
+        print(f"Journal {journal_path.name} already extracted — skipping extraction, still running summary.")
+        print("(Delete the '## Concepts Extracted' section to force re-extraction.)")
+        from summarize import run_summary
+        run_summary(target_date)
+        return
 
     journal_text = journal_path.read_text(encoding="utf-8")
     if not journal_text.strip():
@@ -311,14 +418,29 @@ def process_journal(target_date: date):
     existing_titles = get_existing_titles(existing_notes)
     date_str = target_date.isoformat()
 
+    from llm import get_provider_key, get_model, PROVIDERS
+    provider_key = get_provider_key()
+    model = get_model(provider_key)
+    provider_name = PROVIDERS[provider_key]["name"]
+
     print(f"Processing journal: {journal_path.name}")
+    print(f"Provider: {provider_name} ({model})")
+    print(f"PARA organization: {'enabled' if para_enabled else 'disabled'}")
     print(f"Existing notes in system: {len(existing_notes)}")
     print()
 
-    # Extract notes via Claude
+    # Extract notes via LLM
     print("Extracting concepts...")
-    notes = extract_notes(journal_text, config, date_str, existing_titles)
+    notes = extract_notes(journal_text, config, date_str, existing_titles, para_enabled)
     print(f"Found {len(notes)} items.\n")
+
+    if not notes:
+        # Don't mark the journal as extracted — leave it eligible for a retry.
+        print("Extraction returned no notes — journal left unmarked for re-extraction.")
+        from summarize import run_summary
+        print()
+        run_summary(target_date)
+        return
 
     # Write each note, track new ones
     print("Writing notes:")
@@ -326,7 +448,7 @@ def process_journal(target_date: date):
     for note in notes:
         slug = slugify(note["title"])
         is_new = slug not in existing_notes
-        write_note(note, date_str, existing_notes)
+        write_note(note, date_str, existing_notes, para_enabled)
         if is_new and not note.get("append_to"):
             new_note_titles.append(note["title"])
 
@@ -337,31 +459,58 @@ def process_journal(target_date: date):
 
     # Save manifest for ripple engine
     from ripple import save_manifest, run_ripple
-    save_manifest(new_note_titles)
+    save_manifest(new_note_titles, date_str)
 
-    # Run clustering
-    from cluster_notes import run_clustering
-    print()
-    run_clustering()
+    # Run clustering (only when PARA is enabled) — non-fatal
+    if para_enabled:
+        try:
+            from cluster_notes import run_clustering
+            print()
+            run_clustering()
+        except Exception as e:
+            print(f"\n⚠ Clustering failed (non-fatal): {e}")
 
-    # Run ripple engine — compound knowledge
+    # Run ripple engine — compound knowledge — non-fatal
     if new_note_titles:
-        print()
-        run_ripple(new_note_titles)
+        try:
+            print()
+            run_ripple(new_note_titles, date_str)
+        except Exception as e:
+            print(f"\n⚠ Ripple engine failed (non-fatal): {e}")
 
-    # Generate daily summary and send to Day One
+    # Generate daily summary for Day One — this MUST run
     from summarize import run_summary
     print()
     run_summary(target_date)
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Alluvium — Process a daily journal entry into atomic notes.")
+    from llm import PROVIDERS
+
+    parser = argparse.ArgumentParser(description="Process a daily journal entry into atomic notes.")
     parser.add_argument(
         "date",
         nargs="?",
-        default=date.today().isoformat(),
-        help="Date to process (YYYY-MM-DD). Defaults to today.",
+        default=(date.today() - timedelta(days=1)).isoformat(),
+        help="Date to process (YYYY-MM-DD). Defaults to yesterday (script runs in the morning).",
+    )
+    parser.add_argument(
+        "--provider",
+        choices=list(PROVIDERS.keys()),
+        help="AI provider (overrides config.yaml and ALLUVIUM_PROVIDER).",
+    )
+    parser.add_argument(
+        "--model",
+        help="Model ID (overrides config.yaml and ALLUVIUM_MODEL).",
+    )
+    para_group = parser.add_mutually_exclusive_group()
+    para_group.add_argument(
+        "--para", dest="para", action="store_true", default=None,
+        help="Enable PARA organization (overrides config).",
+    )
+    para_group.add_argument(
+        "--no-para", dest="para", action="store_false",
+        help="Disable PARA organization (flat Inbox).",
     )
     args = parser.parse_args()
 
@@ -371,7 +520,20 @@ def main():
         print(f"Invalid date format: {args.date}. Use YYYY-MM-DD.")
         sys.exit(1)
 
-    process_journal(target_date)
+    # Apply CLI overrides via environment (picked up by llm.py)
+    import os
+    if args.provider:
+        os.environ["ALLUVIUM_PROVIDER"] = args.provider
+    if args.model:
+        os.environ["ALLUVIUM_MODEL"] = args.model
+
+    # Determine PARA: CLI flag > env > config
+    if args.para is not None:
+        para_enabled = args.para
+    else:
+        para_enabled = is_para_enabled()
+
+    process_journal(target_date, para_enabled)
 
 
 if __name__ == "__main__":

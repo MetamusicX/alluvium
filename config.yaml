@@ -1,7 +1,39 @@
 # Alluvium — Configuration
-# Customize this file to reflect your own life domains.
-# The system uses these to intelligently categorize extracted notes.
+# Edit this file to customize your Alluvium setup.
 
+# ---------------------------------------------------------------------------
+# AI Provider
+# Supported: anthropic, openai, google, mistral, deepseek, grok, claude-code
+# (claude-code uses the Claude Code CLI + your subscription — no API key needed)
+# Can also be set via ALLUVIUM_PROVIDER and ALLUVIUM_MODEL environment variables.
+# ---------------------------------------------------------------------------
+provider: anthropic
+model: claude-sonnet-4-6
+
+# ---------------------------------------------------------------------------
+# Whose journal this is — used in the daily-summary prompt ("keep X's voice").
+# ---------------------------------------------------------------------------
+# owner: Your Name
+
+# ---------------------------------------------------------------------------
+# Day One integration (macOS journaling app)
+# When true, daily summaries are also sent to Day One via its CLI.
+# Leave false unless you use Day One and have its CLI installed.
+# ---------------------------------------------------------------------------
+dayone_enabled: false
+
+# ---------------------------------------------------------------------------
+# PARA Organization (Tiago Forte)
+# When true, extracted notes are classified into Projects / Areas / Resources / Archive.
+# When false, all notes go to 01 Inbox/ (flat structure).
+# Can also be set via ALLUVIUM_PARA=1 or ALLUVIUM_PARA=0 environment variable.
+# ---------------------------------------------------------------------------
+para_enabled: true
+
+# ---------------------------------------------------------------------------
+# Life Domains — context for concept extraction
+# Customize these to match your own life areas. Add as many as you need.
+# ---------------------------------------------------------------------------
 domains:
   work:
     name: My Job
@@ -41,9 +73,44 @@ note_types:
   - reading      # Something read or discovered
   - person       # A new person encountered or referenced
 
-# Paths (relative to Alluvium/)
+# PARA classification guidelines
+# Used by the clustering engine to sort notes into the right PARA category.
+para:
+  projects:
+    description: Active efforts with a clear outcome and deadline
+    examples: [a grant application, a race you're preparing for, an article in progress]
+  areas:
+    description: Ongoing responsibilities with no end date
+    examples: [your job, health and fitness, a practice you maintain]
+  resources:
+    description: Topics of interest, reference material, things you learn from
+    examples: [book insights, techniques, concepts, tools]
+  archive:
+    description: Completed or inactive items
+    examples: [finished projects, past events, completed races]
+
+# People categories — used by the clustering engine to sort People/.
+# Customize freely; Authors is always present (it routes to the Authors/ folder).
+people:
+  categories:
+    - name: Friends
+      description: personal friends, social connections
+    - name: Family
+      description: family members
+    - name: Colleagues
+      description: professional colleagues and collaborators
+    - name: Online Contacts
+      description: people known through online interactions, tech community, social media
+    - name: Authors
+      description: "creators known through their work: writers, philosophers, composers, painters, filmmakers, thinkers. NOT personal acquaintances who happen to write. These move to Authors/."
+
+# Paths
 paths:
-  journal: Journal/
-  notes: Notes/
+  journal: 00 Journal/
+  projects: 1 Projects/
+  areas: 2 Areas/
+  resources: 3 Resources/
+  archive: 4 Archive/
+  notes: 01 Inbox/
   people: People/
-  projects: Projects/
+  authors: Authors/

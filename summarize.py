@@ -8,20 +8,23 @@ structured summary ready for copy-pasting into Day One.
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import subprocess
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
-import anthropic
 import yaml
+
+from llm import call_llm
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
 JOURNAL_DIR = BASE_DIR / "00 Journal"
 SUMMARIES_DIR = BASE_DIR / "Day Summaries"
 CONFIG_PATH = BASE_DIR / "config.yaml"
+DAYONE_SENT_PATH = BASE_DIR / ".dayone_sent.json"
 
 # All content folders to scan for today's notes
 ALL_CONTENT_DIRS = [
@@ -42,6 +45,9 @@ def load_config():
 
 def get_journal_text(target_date: date) -> str:
     path = JOURNAL_DIR / f"{target_date.isoformat()}.md"
+    if not path.exists():
+        # Check month subfolder
+        path = JOURNAL_DIR / target_date.strftime("%Y-%m") / f"{target_date.isoformat()}.md"
     if not path.exists():
         return ""
     text = path.read_text(encoding="utf-8")
@@ -83,6 +89,7 @@ def collect_todays_notes(target_date: date) -> list[dict]:
 
 
 def build_summary_prompt(journal_text: str, notes: list[dict], config: dict, target_date: str) -> str:
+    owner = config.get("owner", "the writer")
     domains_desc = "\n".join(
         f"- **{d['name']}**: {d['description']}"
         for d in config["domains"].values()
@@ -101,7 +108,7 @@ def build_summary_prompt(journal_text: str, notes: list[dict], config: dict, tar
 ## Rules
 1. **De-fragment**: If the same topic appears at multiple points in the day, bring those moments together under one heading.
 2. **Group by theme**, not by time. All training goes together. All work goes together. All writing goes together.
-3. **Keep the original voice** — this is Paulo's journal, not a corporate report. First person, reflective, honest.
+3. **Keep the original voice** — this is {owner}'s journal, not a corporate report. First person, reflective, honest.
 4. **Be concise but complete** — capture everything meaningful, skip nothing important, but don't pad.
 5. **Include people** — who was mentioned or interacted with, and in what context.
 6. **Include feelings and reflections** — these matter as much as events.
@@ -150,29 +157,86 @@ Write the summary now. Output ONLY the markdown summary, nothing else."""
 
 
 def generate_summary(journal_text: str, notes: list[dict], config: dict, target_date: str) -> str:
-    client = anthropic.Anthropic()
     prompt = build_summary_prompt(journal_text, notes, config, target_date)
+    return call_llm(prompt, max_tokens=4096)
 
-    message = client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
-        messages=[{"role": "user", "content": prompt}],
+
+def _load_dayone_sent() -> set[str]:
+    if not DAYONE_SENT_PATH.exists():
+        return set()
+    try:
+        data = json.loads(DAYONE_SENT_PATH.read_text(encoding="utf-8"))
+        return set(data.get("sent", []))
+    except Exception:
+        return set()
+
+
+def _record_dayone_sent(target_date: date):
+    sent = _load_dayone_sent()
+    sent.add(target_date.isoformat())
+    DAYONE_SENT_PATH.write_text(
+        json.dumps({"sent": sorted(sent)}, indent=2) + "\n",
+        encoding="utf-8",
     )
-
-    return message.content[0].text.strip()
 
 
 def send_to_dayone(summary: str, target_date: date):
-    """Send the summary to Day One via URL scheme (preserves markdown formatting)."""
+    """Send the summary to Day One via CLI with correct date."""
+    date_str = target_date.strftime("%Y-%m-%d 21:45")
+    try:
+        result = subprocess.run(
+            ["dayone", "--date", date_str, "--tags", "alluvium", "daily-summary", "--", "new"],
+            input=summary,
+            text=True,
+            capture_output=True,
+            timeout=30,
+        )
+        if result.returncode == 0:
+            _record_dayone_sent(target_date)
+            print(f"Sent to Day One (CLI, dated {target_date.isoformat()}).")
+        else:
+            print(f"Day One CLI error: {result.stderr.strip()}")
+            # Fallback to URL scheme
+            _send_to_dayone_url(summary, target_date)
+    except FileNotFoundError:
+        print("dayone CLI not found — falling back to URL scheme.")
+        _send_to_dayone_url(summary, target_date)
+    except Exception as e:
+        print(f"Could not send to Day One: {e}")
+
+
+def _send_to_dayone_url(summary: str, target_date: date):
+    """Fallback: send via URL scheme (no custom date support)."""
     import urllib.parse
     try:
         encoded = urllib.parse.quote(summary)
-        date_str = target_date.strftime("%B %d, %Y")
         url = f"dayone://post?entry={encoded}&tags=alluvium,daily-summary"
         subprocess.run(["open", url], check=True, timeout=10)
-        print("Sent to Day One (with formatting).")
+        _record_dayone_sent(target_date)
+        print("Sent to Day One via URL scheme (today's date).")
     except Exception as e:
         print(f"Could not send to Day One: {e}")
+
+
+def _dayone_enabled(config: dict) -> bool:
+    """Day One delivery is opt-out: enabled by default, disabled via config on installs without Day One."""
+    return bool(config.get("dayone_enabled", True))
+
+
+def _summary_already_sent(target_date: date) -> bool:
+    """Check the sentinel: was this date already sent to Day One?"""
+    return target_date.isoformat() in _load_dayone_sent()
+
+
+def _exit_if_unsent(target_date: date):
+    """Exit non-zero when the send didn't land (sentinel not recorded).
+
+    The summary file is already on disk, so the launchd retry loop / catch-up
+    will take the re-send path instead of regenerating.
+    """
+    if not _summary_already_sent(target_date):
+        print("\n⚠ Day One send did not complete — exiting non-zero so the retry loop can re-send.")
+        sys.exit(1)
 
 
 def run_summary(target_date: date):
@@ -180,6 +244,31 @@ def run_summary(target_date: date):
 
     config = load_config()
     date_str = target_date.isoformat()
+
+    SUMMARIES_DIR.mkdir(exist_ok=True)
+    month_dir = SUMMARIES_DIR / target_date.strftime("%Y-%m")
+    if month_dir.exists():
+        summary_path = month_dir / f"{date_str}.md"
+    else:
+        summary_path = SUMMARIES_DIR / f"{date_str}.md"
+
+    dayone = _dayone_enabled(config)
+    summary_exists = summary_path.exists()
+    already_sent = _summary_already_sent(target_date)
+
+    if summary_exists and (already_sent or not dayone):
+        print(f"Summary for {date_str} already exists — nothing to do.")
+        print(f"\n=== Summary complete ===")
+        return
+
+    if summary_exists and not already_sent:
+        # File on disk but sentinel says not sent — reuse the file, just send.
+        summary = summary_path.read_text(encoding="utf-8").rstrip("\n")
+        print(f"Summary file already exists ({summary_path.name}) — re-sending to Day One.")
+        send_to_dayone(summary, target_date)
+        _exit_if_unsent(target_date)
+        print(f"\n=== Summary complete — sent to Day One ===")
+        return
 
     # Read journal
     journal_text = get_journal_text(target_date)
@@ -196,15 +285,21 @@ def run_summary(target_date: date):
     print("Generating summary...")
     summary = generate_summary(journal_text, notes, config, date_str)
 
-    # Save
-    SUMMARIES_DIR.mkdir(exist_ok=True)
-    summary_path = SUMMARIES_DIR / f"{date_str}.md"
     summary_path.write_text(summary + "\n", encoding="utf-8")
-
     print(f"Summary saved: {summary_path.name}")
 
-    # Send to Day One
+    if not dayone:
+        print("Day One delivery disabled (dayone_enabled: false) — summary saved locally.")
+        print(f"\n=== Summary complete ===")
+        return
+
+    if already_sent:
+        print(f"Sentinel already marks {date_str} as sent — skipping Day One re-send.")
+        print(f"\n=== Summary complete — file written, not re-sent ===")
+        return
+
     send_to_dayone(summary, target_date)
+    _exit_if_unsent(target_date)
 
     print(f"\n=== Summary complete — sent to Day One ===")
 
@@ -214,8 +309,8 @@ def main():
     parser.add_argument(
         "date",
         nargs="?",
-        default=date.today().isoformat(),
-        help="Date to summarize (YYYY-MM-DD). Defaults to today.",
+        default=(date.today() - timedelta(days=1)).isoformat(),
+        help="Date to summarize (YYYY-MM-DD). Defaults to yesterday, matching process_journal.py.",
     )
     args = parser.parse_args()
 
