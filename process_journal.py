@@ -379,6 +379,44 @@ def update_journal_entry(journal_path: Path, notes: list[dict]):
     print(f"\nUpdated journal entry with {len(notes)} concept links.")
 
 
+def append_folded_section(journal_path: Path, titles: list[str]):
+    """Thread standalone notes folded in today back to the journal entry."""
+    if not titles or not journal_path.exists():
+        return
+    text = journal_path.read_text(encoding="utf-8")
+
+    if "## Notes Folded In" in text:
+        # Section exists (e.g. a re-run) — only add titles not already linked.
+        new_titles = [t for t in titles if f"[[{t}]]" not in text]
+        if not new_titles:
+            return
+        links = "\n".join(f"- [[{t}]]" for t in new_titles)
+        journal_path.write_text(text.rstrip("\n") + "\n" + links + "\n", encoding="utf-8")
+    else:
+        links = "\n".join(f"- [[{t}]]" for t in titles)
+        section = f"\n\n---\n## Notes Folded In\n{links}\n"
+        journal_path.write_text(text + section, encoding="utf-8")
+    print(f"Linked {len(titles)} folded note(s) from the journal entry.")
+
+
+def fold_in_standalone(target_date: date, journal_path: Path, para_enabled: bool,
+                       config: dict | None = None, existing_notes: dict[str, Path] | None = None) -> list[str]:
+    """Fold today's standalone Inbox notes into the vault and backlink them.
+
+    Reusable across the main path and the early-return paths so a standalone note
+    is never orphaned just because the journal was empty or already extracted.
+    """
+    from standalone import process_standalone_notes
+    if config is None:
+        config = load_config()
+    if existing_notes is None:
+        existing_notes = get_existing_notes()
+    titles = process_standalone_notes(target_date, existing_notes, para_enabled, config)
+    if titles:
+        append_folded_section(journal_path, titles)
+    return titles
+
+
 def _already_extracted(journal_path: Path) -> bool:
     """Check if this journal entry has already been processed."""
     if not journal_path.exists():
@@ -404,12 +442,20 @@ def process_journal(target_date: date, para_enabled: bool = True):
     if already_extracted:
         print(f"Journal {journal_path.name} already extracted — skipping extraction, still running summary.")
         print("(Delete the '## Concepts Extracted' section to force re-extraction.)")
+        # A standalone note written after the first run still gets folded in.
+        fold_in_standalone(target_date, journal_path, para_enabled)
         from summarize import run_summary
         run_summary(target_date)
         return
 
     journal_text = journal_path.read_text(encoding="utf-8")
     if not journal_text.strip():
+        # An empty journal doesn't mean an empty day — a standalone note may be
+        # today's real content. Fold it in and summarize rather than bailing out.
+        if fold_in_standalone(target_date, journal_path, para_enabled):
+            from summarize import run_summary
+            run_summary(target_date)
+            return
         print(f"Journal entry for {target_date.isoformat()} is empty.")
         sys.exit(1)
 
@@ -437,6 +483,8 @@ def process_journal(target_date: date, para_enabled: bool = True):
     if not notes:
         # Don't mark the journal as extracted — leave it eligible for a retry.
         print("Extraction returned no notes — journal left unmarked for re-extraction.")
+        # Still fold in any standalone notes written today.
+        fold_in_standalone(target_date, journal_path, para_enabled, config, existing_notes)
         from summarize import run_summary
         print()
         run_summary(target_date)
@@ -454,6 +502,11 @@ def process_journal(target_date: date, para_enabled: bool = True):
 
     # Update journal entry with backlinks
     update_journal_entry(journal_path, notes)
+
+    # Fold in standalone notes written today (parallel intake to the journal).
+    # These compound through ripple alongside the journal's atoms.
+    folded_titles = fold_in_standalone(target_date, journal_path, para_enabled, config, existing_notes)
+    new_note_titles.extend(folded_titles)
 
     print(f"\nDone. {len(notes)} items processed from {date_str}.")
 

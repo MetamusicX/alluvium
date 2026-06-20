@@ -51,9 +51,10 @@ def get_journal_text(target_date: date) -> str:
     if not path.exists():
         return ""
     text = path.read_text(encoding="utf-8")
-    # Strip the "Concepts Extracted" section — that's metadata, not content
-    if "## Concepts Extracted" in text:
-        text = text.split("## Concepts Extracted")[0].strip()
+    # Strip pipeline-appended metadata sections — they're not journal content.
+    for marker in ("## Concepts Extracted", "## Notes Folded In"):
+        if marker in text:
+            text = text.split(marker)[0].strip()
     return text
 
 
