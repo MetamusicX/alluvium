@@ -89,6 +89,7 @@ Alluvium/
 ├── ripple.py                     ← Knowledge compounding engine
 ├── summarize.py                  ← Daily summary generator (+ optional Day One)
 ├── healthcheck.py                ← Installation verifier
+├── audit_frontmatter.py          ← Lists notes with damaged tags/related (read-only)
 ├── setup.sh                      ← Setup and scheduling script
 ├── open-today.sh                 ← Creates + opens today's journal note
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
@@ -324,6 +325,16 @@ The summary is saved to `5 Conversations/` as a structured markdown file:
 These files are not automatic. They are created only when you explicitly ask — preserving only the dialogues that crystallize something worth returning to. Over time, the Conversations folder becomes a record of your evolving understanding of your own material.
 
 This is the shift from a system that merely *stores* knowledge to one that helps you *think with* it.
+
+### Checking notes for damaged frontmatter
+
+Older versions of the pipeline could mangle hand-edited `tags` and `related` fields (a single `tags: solo` became `[l, o, s]`; `related: [[Note]]` became `"['Note']"`). To list any affected notes without changing them:
+
+```bash
+python3 audit_frontmatter.py
+```
+
+Related links are recoverable and the correct value is suggested; tags split into letters must be fixed by hand.
 
 ### Voice input
 
