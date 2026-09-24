@@ -4,7 +4,8 @@ Alluvium — Frontmatter Audit
 Lists notes whose `tags` or `related` frontmatter looks damaged by the
 pre-fix pipeline (see normalize_tags / normalize_related in llm.py).
 
-Read-only: nothing is written. Exits 0 if no damage is found, 1 otherwise.
+Read-only by default. With --fix, recoverable `related` damage is repaired
+in place (see fix_note). Exits 0 when nothing is left to fix by hand, 1 otherwise.
 
 What older versions could leave behind:
   - tags split into letters      `tags: solo` + a new tag  ->  [l, o, run, s]
@@ -13,14 +14,15 @@ What older versions could leave behind:
   - related double-bracketed      LLM sent "[[Note]]"         ->  "[[[[Note]]]]"
 
 Split tags were stored as a sorted set, so the original word cannot be
-recovered and must be fixed by hand. The related damage is recoverable, and
-the suggested value is shown.
+recovered and must be fixed by hand. The related damage is recoverable: the
+suggested value is shown, and --fix writes it.
 """
 
 from __future__ import annotations
 
 import argparse
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -76,9 +78,10 @@ def _repr_title(entry: str) -> str | None:
     return value if isinstance(value, str) else None
 
 
-def check_related(related) -> list[str]:
+def repair_related(related) -> tuple[list[str], list | None]:
+    """Return (problems, repaired list), or ([], None) when `related` is not damaged."""
     if not isinstance(related, list):
-        return []
+        return [], None
     problems = []
     suggested = []
     damaged = False
@@ -120,10 +123,64 @@ def check_related(related) -> list[str]:
         suggested.append(entry)
     flush_chars()
 
-    if damaged:
-        deduped = list(dict.fromkeys(suggested))
-        problems.append(f"suggested related: {deduped}")
+    if not damaged:
+        return [], None
+    deduped = []
+    for entry in suggested:
+        if entry not in deduped:
+            deduped.append(entry)
+    return problems, deduped
+
+
+def check_related(related) -> list[str]:
+    problems, suggested = repair_related(related)
+    if suggested is not None:
+        problems.append(f"suggested related: {suggested}")
     return problems
+
+
+def _replace_related_block(fm_text: str, related: list) -> str | None:
+    """Swap only the `related:` key (and its continuation lines) in raw frontmatter text."""
+    lines = fm_text.splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if re.match(r"related\s*:", line)]
+    if len(starts) != 1:
+        return None
+    start = end = starts[0]
+    # Block-style items ("- x", at column 0 as yaml.dump writes them, or indented)
+    # and wrapped flow lists continue the key until the next top-level line.
+    while end + 1 < len(lines) and lines[end + 1].startswith((" ", "\t", "-")):
+        end += 1
+    block = yaml.dump({"related": related}, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    return "".join(lines[:start]) + block + "".join(lines[end + 1:])
+
+
+def fix_note(path: Path) -> str:
+    """Repair recoverable `related` damage in place.
+
+    Returns "fixed", "clean" (nothing recoverable to fix) or "skipped". Only the
+    `related` lines change: the body, other keys, comments and date_modified are
+    left byte-for-byte as they were, and the file is written only if re-parsing
+    shows `related` is the sole difference.
+    """
+    text = path.read_text(encoding="utf-8")
+    fm = read_frontmatter(path)
+    if fm is None:
+        return "clean"
+    _, repaired = repair_related(fm.get("related"))
+    if repaired is None:
+        return "clean"
+    parts = text.split("---", 2)
+    new_fm_text = _replace_related_block(parts[1], repaired)
+    if new_fm_text is None:
+        return "skipped"
+    try:
+        new_fm = yaml.safe_load(new_fm_text)
+    except yaml.YAMLError:
+        return "skipped"
+    if new_fm != {**fm, "related": repaired}:
+        return "skipped"
+    path.write_text("---" + new_fm_text + "---" + parts[2], encoding="utf-8")
+    return "fixed"
 
 
 def audit(root: Path) -> dict[Path, list[str]]:
@@ -143,9 +200,11 @@ def audit(root: Path) -> dict[Path, list[str]]:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="List notes with damaged tags/related frontmatter (read-only).")
+    parser = argparse.ArgumentParser(description="List notes with damaged tags/related frontmatter.")
     parser.add_argument("root", nargs="?", type=Path, default=BASE_DIR,
                         help="Vault root (defaults to this Alluvium folder).")
+    parser.add_argument("--fix", action="store_true",
+                        help="Repair recoverable `related` damage in place. Split tags still need fixing by hand.")
     args = parser.parse_args()
 
     findings = audit(args.root)
@@ -159,7 +218,32 @@ def main():
         for msg in problems:
             print(f"  - {msg}")
         print()
-    sys.exit(1)
+
+    if not args.fix:
+        print("Run again with --fix to repair the related links above (tags must be fixed by hand).")
+        sys.exit(1)
+
+    fixed, skipped = [], []
+    for path in findings:
+        status = fix_note(args.root / path)
+        if status == "fixed":
+            fixed.append(path)
+        elif status == "skipped":
+            skipped.append(path)
+
+    print(f"Fixed related links in {len(fixed)} note(s).")
+    for path in fixed:
+        print(f"  ✓ {path}")
+    if skipped:
+        print(f"\nSkipped {len(skipped)} note(s) — frontmatter layout too unusual to edit safely; fix by hand:")
+        for path in skipped:
+            print(f"  ✗ {path}")
+
+    remaining = audit(args.root)
+    if remaining:
+        print(f"\n{len(remaining)} note(s) still need fixing by hand (re-run without --fix to see them).")
+        sys.exit(1)
+    sys.exit(0)
 
 
 if __name__ == "__main__":

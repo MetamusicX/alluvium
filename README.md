@@ -89,7 +89,7 @@ Alluvium/
 ├── ripple.py                     ← Knowledge compounding engine
 ├── summarize.py                  ← Daily summary generator (+ optional Day One)
 ├── healthcheck.py                ← Installation verifier
-├── audit_frontmatter.py          ← Lists notes with damaged tags/related (read-only)
+├── audit_frontmatter.py          ← Lists (and with --fix repairs) damaged tags/related
 ├── setup.sh                      ← Setup and scheduling script
 ├── open-today.sh                 ← Creates + opens today's journal note
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
@@ -334,7 +334,13 @@ Older versions of the pipeline could mangle hand-edited `tags` and `related` fie
 python3 audit_frontmatter.py
 ```
 
-Related links are recoverable and the correct value is suggested; tags split into letters must be fixed by hand.
+Related links are recoverable and the correct value is suggested. To apply those repairs in place:
+
+```bash
+python3 audit_frontmatter.py --fix
+```
+
+`--fix` rewrites only the `related` lines of each damaged note (body, other keys, comments and `date_modified` are untouched) and skips any note whose frontmatter layout it can't edit safely. Tags split into letters can't be recovered and must be fixed by hand.
 
 ### Voice input
 

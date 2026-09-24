@@ -93,3 +93,101 @@ class TestMain:
         out = capsys.readouterr().out
         assert "Found 1 note(s)" in out
         assert "01 Inbox/a.md" in out
+
+
+# ---------------------------------------------------------------------------
+# --fix
+# ---------------------------------------------------------------------------
+
+def note_text(fm_lines, body="Body.\n"):
+    return f"---\n{fm_lines}\n---\n{body}"
+
+
+class TestFixNote:
+    @pytest.mark.parametrize("damaged, repaired", [
+        # yaml.dump layout written by the old pipeline
+        ("related:\n- '[''Note'']'\n- '[[New]]'", "related:\n- '[[Note]]'\n- '[[New]]'"),
+        ("related:\n- '['\n- '['\n- N\n- o\n- t\n- e\n- ']'\n- ']'", "related:\n- '[[Note]]'"),
+        ("related:\n- '[[[[Note]]]]'", "related:\n- '[[Note]]'"),
+        # hand-written layouts
+        ("related:\n  - \"['Note']\"", "related:\n- '[[Note]]'"),
+        ("related: [\"['A']\",\n    \"[[B]]\"]", "related:\n- '[[A]]'\n- '[[B]]'"),
+    ])
+    def test_repairs_only_the_related_lines(self, tmp_path, damaged, repaired):
+        before = "title: T\n# my comment\ndate_modified: 2026-01-01\n{}\nstatus: active"
+        path = tmp_path / "n.md"
+        body = "Body with a line that says\nrelated: not frontmatter\n---\nmore\n"
+        path.write_text(note_text(before.format(damaged), body))
+        assert audit.fix_note(path) == "fixed"
+        assert path.read_text() == note_text(before.format(repaired), body)
+
+    def test_second_run_is_a_no_op(self, tmp_path):
+        path = tmp_path / "n.md"
+        path.write_text(note_text("related:\n- '[''Note'']'"))
+        assert audit.fix_note(path) == "fixed"
+        fixed = path.read_text()
+        assert audit.fix_note(path) == "clean"
+        assert path.read_text() == fixed
+
+    @pytest.mark.parametrize("fm_lines", [
+        "tags: [l, o, s]",              # tags damage is not auto-fixed
+        "related: ['[[Note]]']",        # healthy
+        "title: no related key",
+    ])
+    def test_leaves_other_notes_untouched(self, tmp_path, fm_lines):
+        path = tmp_path / "n.md"
+        path.write_text(note_text(fm_lines))
+        assert audit.fix_note(path) == "clean"
+        assert path.read_text() == note_text(fm_lines)
+
+    def test_skips_when_layout_is_ambiguous(self, tmp_path):
+        # Duplicate `related` keys: YAML keeps the last, so editing either is unsafe.
+        text = note_text("related: [x]\nrelated:\n- '[''Note'']'")
+        path = tmp_path / "n.md"
+        path.write_text(text)
+        assert audit.fix_note(path) == "skipped"
+        assert path.read_text() == text
+
+    def test_skips_when_edit_would_change_another_key(self, tmp_path, monkeypatch):
+        text = note_text("related:\n- '[''Note'']'\nstatus: active")
+        path = tmp_path / "n.md"
+        path.write_text(text)
+        # Simulate a block replacement that swallows the next key.
+        monkeypatch.setattr(audit, "_replace_related_block",
+                            lambda fm_text, related: "\nrelated:\n- '[[Note]]'\n")
+        assert audit.fix_note(path) == "skipped"
+        assert path.read_text() == text
+
+
+class TestMainFix:
+    def run(self, monkeypatch, root):
+        monkeypatch.setattr("sys.argv", ["audit_frontmatter.py", str(root), "--fix"])
+        with pytest.raises(SystemExit) as exc:
+            audit.main()
+        return exc.value.code
+
+    def test_fixes_everything_recoverable(self, tmp_path, monkeypatch, capsys):
+        write_note(tmp_path, "01 Inbox/a.md", "related:\n- \"['Note']\"")
+        write_note(tmp_path, "People/b.md", "related:\n- '[[[[X]]]]'")
+        assert self.run(monkeypatch, tmp_path) == 0
+        assert "Fixed related links in 2 note(s)" in capsys.readouterr().out
+        assert audit.audit(tmp_path) == {}
+
+    def test_reports_what_is_left_for_hand_fixing(self, tmp_path, monkeypatch, capsys):
+        write_note(tmp_path, "01 Inbox/a.md", "related:\n- \"['Note']\"")
+        tags = write_note(tmp_path, "01 Inbox/t.md", "tags: [l, o, s]")
+        tags_before = tags.read_text()
+        assert self.run(monkeypatch, tmp_path) == 1
+        out = capsys.readouterr().out
+        assert "Fixed related links in 1 note(s)" in out
+        assert "1 note(s) still need fixing by hand" in out
+        assert tags.read_text() == tags_before
+
+    def test_without_fix_nothing_is_written(self, tmp_path, monkeypatch, capsys):
+        path = write_note(tmp_path, "01 Inbox/a.md", "related:\n- \"['Note']\"")
+        before = path.read_text()
+        monkeypatch.setattr("sys.argv", ["audit_frontmatter.py", str(tmp_path)])
+        with pytest.raises(SystemExit):
+            audit.main()
+        assert path.read_text() == before
+        assert "Run again with --fix" in capsys.readouterr().out
