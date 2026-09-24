@@ -93,6 +93,8 @@ Alluvium/
 ├── open-today.sh                 ← Creates + opens today's journal note
 ├── com.alluvium.process.plist    ← macOS LaunchAgent template
 ├── requirements.txt
+├── requirements-dev.txt          ← Test dependencies (pytest)
+├── tests/                        ← Offline test suite
 └── README.md
 ```
 
@@ -326,6 +328,15 @@ This is the shift from a system that merely *stores* knowledge to one that helps
 ### Voice input
 
 Alluvium accepts any text — including dictated text. Use any dictation tool (Wispr Flow, macOS Dictation, or similar) to speak directly into your journal file. There is nothing to configure; the input is just markdown.
+
+## Tests
+
+```bash
+pip3 install -r requirements-dev.txt
+python3 -m pytest
+```
+
+The suite runs fully offline: API calls, the `claude` CLI and retry back-off sleeps are all mocked, and your `config.yaml` is never read. It finishes in well under a second and prints the slowest tests after each run.
 
 ## The shift from PKM to PKA
 
