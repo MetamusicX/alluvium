@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json, normalize_tags
+from llm import call_llm_json, normalize_related, normalize_tags
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -69,6 +69,7 @@ def read_note(filepath: Path) -> dict | None:
         fm = yaml.safe_load(parts[1])
         body = parts[2].strip() if len(parts) > 2 else ""
         fm["tags"] = normalize_tags(fm.get("tags"))
+        fm["related"] = normalize_related(fm.get("related"))
         fm["_path"] = filepath
         fm["_body"] = body
         fm["_full_text"] = text
@@ -230,7 +231,7 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict], date_str: str | No
         connection_type = ripple.get("connection_type", "cross-reference")
         reason = ripple.get("reason", "")
         append_text = ripple.get("append_text", "")
-        add_related = ripple.get("add_related", [])
+        add_related = normalize_related(ripple.get("add_related"))
         add_tags = normalize_tags(ripple.get("add_tags"))
 
         target = find_target_note(target_title, all_notes)
@@ -251,9 +252,8 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict], date_str: str | No
                     fm = yaml.safe_load(parts[1])
 
                     # Add new related links
-                    existing_related = [str(r) for r in fm.get("related", [])]
-                    for rel in add_related:
-                        link = f"[[{rel}]]"
+                    existing_related = normalize_related(fm.get("related"))
+                    for link in add_related:
                         if link not in existing_related:
                             existing_related.append(link)
                             modified = True

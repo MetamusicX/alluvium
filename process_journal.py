@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json, is_para_enabled, normalize_tags
+from llm import call_llm_json, is_para_enabled, normalize_related, normalize_tags
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -340,7 +340,7 @@ def write_note(note: dict, target_date: str, existing_notes: dict[str, Path], pa
     frontmatter.update({
         "tags": normalize_tags(note.get("tags")),
         "source_entries": [f"[[{target_date}]]"],
-        "related": [f"[[{r}]]" for r in note.get("related", [])],
+        "related": normalize_related(note.get("related")),
         "status": "active",
     })
 

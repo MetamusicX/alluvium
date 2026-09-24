@@ -22,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json, normalize_tags
+from llm import call_llm_json, normalize_related, normalize_tags
 from process_journal import load_config
 
 # --- Paths ---
@@ -187,7 +187,7 @@ def _fold_in(path: Path, target_date: str, config: dict, existing_notes: dict, p
         new_fm["para"] = cls["para"]
     new_fm["tags"] = sorted(set(normalize_tags(fm.get("tags"))) | set(cls["tags"]))
     new_fm["source_entries"] = [f"[[{target_date}]]"]  # threads the note to the day
-    new_fm["related"] = fm.get("related", [])
+    new_fm["related"] = normalize_related(fm.get("related"))
     new_fm["status"] = fm.get("status", "active")
     new_fm["alluvium_processed"] = target_date  # sentinel: never re-fold
 

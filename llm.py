@@ -330,6 +330,31 @@ def normalize_tags(tags) -> list[str]:
     return [str(t).strip() for t in tags if t is not None and str(t).strip()]
 
 
+def normalize_related(related) -> list[str]:
+    """Coerce a frontmatter or LLM `related` value into a de-duplicated list of "[[Title]]" links.
+
+    Accepts None, a single link or title, and YAML's reading of unquoted
+    Obsidian links (`related: [[Note]]` parses as [["Note"]]). Titles with or
+    without brackets end up as exactly one "[[...]]" wrapper.
+    """
+    def leaves(value):
+        if isinstance(value, (list, tuple)):
+            for item in value:
+                yield from leaves(item)
+        elif value is not None:
+            yield value
+
+    links = []
+    for leaf in leaves(related):
+        title = str(leaf).strip()
+        if title.startswith("[[") and title.endswith("]]"):
+            title = title[2:-2].strip()
+        link = f"[[{title}]]"
+        if title and link not in links:
+            links.append(link)
+    return links
+
+
 def call_llm_json(prompt: str, max_tokens: int = 8192, parse_retries: int = 2):
     """Call the LLM and parse the response as JSON.
 
