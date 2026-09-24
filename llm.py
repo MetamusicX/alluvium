@@ -316,6 +316,20 @@ def strip_code_fences(text: str) -> str:
     return text
 
 
+def normalize_tags(tags) -> list[str]:
+    """Coerce a frontmatter or LLM `tags` value into a list of strings.
+
+    Hand-edited frontmatter can hold an empty `tags:` (None) or a bare
+    `tags: solo`, and YAML reads `2026` as an int. Treating those as-is either
+    crashes or iterates a string character by character.
+    """
+    if tags is None:
+        return []
+    if not isinstance(tags, (list, tuple, set)):
+        tags = [tags]
+    return [str(t).strip() for t in tags if t is not None and str(t).strip()]
+
+
 def call_llm_json(prompt: str, max_tokens: int = 8192, parse_retries: int = 2):
     """Call the LLM and parse the response as JSON.
 

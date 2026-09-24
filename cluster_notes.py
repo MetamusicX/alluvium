@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json, is_para_enabled
+from llm import call_llm_json, is_para_enabled, normalize_tags
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -52,6 +52,7 @@ def read_note_metadata(filepath: Path) -> dict | None:
     try:
         fm_text = text.split("---", 2)[1]
         fm = yaml.safe_load(fm_text)
+        fm["tags"] = normalize_tags(fm.get("tags"))
         fm["_path"] = filepath
         fm["_slug"] = filepath.stem
         fm["_body"] = text.split("---", 2)[2] if len(text.split("---", 2)) > 2 else ""

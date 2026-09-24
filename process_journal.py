@@ -14,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json, is_para_enabled
+from llm import call_llm_json, is_para_enabled, normalize_tags
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -281,8 +281,8 @@ def append_to_note(filepath: Path, note: dict, target_date: str):
         if len(parts) >= 3:
             try:
                 fm = yaml.safe_load(parts[1])
-                existing_tags = set(fm.get("tags", []))
-                new_tags = set(note.get("tags", []))
+                existing_tags = set(normalize_tags(fm.get("tags")))
+                new_tags = set(normalize_tags(note.get("tags")))
                 if new_tags - existing_tags:
                     fm["tags"] = sorted(existing_tags | new_tags)
                 fm["date_modified"] = target_date
@@ -338,7 +338,7 @@ def write_note(note: dict, target_date: str, existing_notes: dict[str, Path], pa
     if note.get("para"):
         frontmatter["para"] = note["para"]
     frontmatter.update({
-        "tags": note.get("tags", []),
+        "tags": normalize_tags(note.get("tags")),
         "source_entries": [f"[[{target_date}]]"],
         "related": [f"[[{r}]]" for r in note.get("related", [])],
         "status": "active",

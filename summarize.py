@@ -17,7 +17,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm
+from llm import call_llm, normalize_tags
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -77,15 +77,11 @@ def collect_todays_notes(target_date: date) -> list[dict]:
                 body = text.split("---", 2)[2].strip() if len(text.split("---", 2)) > 2 else ""
                 # Include if created or modified today
                 if str(fm.get("date_created", "")) == date_str or str(fm.get("date_modified", "")) == date_str:
-                    # Frontmatter may hold an empty `tags:` (None), a single tag, or non-string items.
-                    tags = fm.get("tags") or []
-                    if not isinstance(tags, list):
-                        tags = [tags]
                     notes.append({
                         "title": fm.get("title", f.stem),
                         "type": fm.get("type", "note"),
                         "domain": fm.get("domain", "personal"),
-                        "tags": [str(t) for t in tags],
+                        "tags": normalize_tags(fm.get("tags")),
                         "body": body[:500],
                     })
             except Exception:

@@ -22,7 +22,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json
+from llm import call_llm_json, normalize_tags
 from process_journal import load_config
 
 # --- Paths ---
@@ -151,7 +151,7 @@ def _classify(title: str, body: str, config: dict, para_enabled: bool) -> dict:
     if ntype not in note_types:
         ntype = "reflection"
 
-    tags = [str(t).lower().strip() for t in result.get("tags", []) if str(t).strip()]
+    tags = [t.lower() for t in normalize_tags(result.get("tags"))]
 
     para = result.get("para")
     if para not in PARA_FOLDERS:
@@ -185,7 +185,7 @@ def _fold_in(path: Path, target_date: str, config: dict, existing_notes: dict, p
     new_fm["domain"] = cls["domain"]
     if para_enabled and cls["para"]:
         new_fm["para"] = cls["para"]
-    new_fm["tags"] = sorted(set(fm.get("tags", []) or []) | set(cls["tags"]))
+    new_fm["tags"] = sorted(set(normalize_tags(fm.get("tags"))) | set(cls["tags"]))
     new_fm["source_entries"] = [f"[[{target_date}]]"]  # threads the note to the day
     new_fm["related"] = fm.get("related", [])
     new_fm["status"] = fm.get("status", "active")

@@ -19,7 +19,7 @@ from pathlib import Path
 
 import yaml
 
-from llm import call_llm_json
+from llm import call_llm_json, normalize_tags
 
 # --- Paths ---
 BASE_DIR = Path(__file__).parent
@@ -68,6 +68,7 @@ def read_note(filepath: Path) -> dict | None:
         parts = text.split("---", 2)
         fm = yaml.safe_load(parts[1])
         body = parts[2].strip() if len(parts) > 2 else ""
+        fm["tags"] = normalize_tags(fm.get("tags"))
         fm["_path"] = filepath
         fm["_body"] = body
         fm["_full_text"] = text
@@ -230,7 +231,7 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict], date_str: str | No
         reason = ripple.get("reason", "")
         append_text = ripple.get("append_text", "")
         add_related = ripple.get("add_related", [])
-        add_tags = ripple.get("add_tags", [])
+        add_tags = normalize_tags(ripple.get("add_tags"))
 
         target = find_target_note(target_title, all_notes)
 
@@ -259,7 +260,7 @@ def apply_ripples(ripples: list[dict], all_notes: list[dict], date_str: str | No
                     fm["related"] = existing_related
 
                     # Add new tags
-                    existing_tags = set(fm.get("tags", []))
+                    existing_tags = set(normalize_tags(fm.get("tags")))
                     new_tags = set(add_tags)
                     if new_tags - existing_tags:
                         fm["tags"] = sorted(existing_tags | new_tags)
