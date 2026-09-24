@@ -151,6 +151,17 @@ class TestCollectNotes:
         assert n["title"] == "sparse"
         assert (n["type"], n["domain"], n["tags"]) == ("note", "personal", [])
 
+    @pytest.mark.parametrize("tags, expected", [
+        ("", []),                      # empty `tags:` parses as None
+        ("solo", ["solo"]),            # single tag, not a list
+        ("[2026, run]", ["2026", "run"]),  # non-string items
+        ("[]", []),
+    ])
+    def test_tags_are_normalised_to_list_of_strings(self, vault, tags, expected):
+        write(vault / "01 Inbox" / "n.md", note(tags=tags))
+        [n] = summarize.collect_todays_notes(DAY)
+        assert n["tags"] == expected
+
     def test_skips_underscore_files_and_non_frontmatter(self, vault):
         write(vault / "01 Inbox" / "_index.md", note())
         write(vault / "01 Inbox" / "plain.md", "No frontmatter, 2026-04-19")
@@ -269,6 +280,16 @@ class TestRunSummary:
         assert (vault / "Day Summaries" / "2026-04-19.md").read_text() == "# Summary\n"
         assert "### Run" in llm_calls[0]["prompt"]
         assert sent_dates(vault) == []
+
+    def test_odd_tags_do_not_break_the_summary(self, vault, llm_calls):
+        self.journal(vault)
+        write(vault / "01 Inbox" / "empty.md", note(title="Empty", tags=""))
+        write(vault / "01 Inbox" / "single.md", note(title="Single", tags="solo"))
+        summarize.run_summary(DAY)
+        prompt = llm_calls[0]["prompt"]
+        assert "Tags: solo\n" in prompt
+        assert "Tags: \n" in prompt
+        assert (vault / "Day Summaries" / "2026-04-19.md").exists()
 
     def test_saves_into_existing_month_folder(self, vault, llm_calls):
         self.journal(vault)

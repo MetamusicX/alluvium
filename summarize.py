@@ -77,11 +77,15 @@ def collect_todays_notes(target_date: date) -> list[dict]:
                 body = text.split("---", 2)[2].strip() if len(text.split("---", 2)) > 2 else ""
                 # Include if created or modified today
                 if str(fm.get("date_created", "")) == date_str or str(fm.get("date_modified", "")) == date_str:
+                    # Frontmatter may hold an empty `tags:` (None), a single tag, or non-string items.
+                    tags = fm.get("tags") or []
+                    if not isinstance(tags, list):
+                        tags = [tags]
                     notes.append({
                         "title": fm.get("title", f.stem),
                         "type": fm.get("type", "note"),
                         "domain": fm.get("domain", "personal"),
-                        "tags": fm.get("tags", []),
+                        "tags": [str(t) for t in tags],
                         "body": body[:500],
                     })
             except Exception:
